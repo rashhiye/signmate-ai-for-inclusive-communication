@@ -287,20 +287,36 @@ export class WebRTCService {
       this.callbacks?.onSignalingStatus?.({ rtdbConnected: true });
 
       // 2. Track peer count changes
-      const unsubPeers = onValue(peersRef, (snapshot) => {
-        const peers = snapshot.val() || {};
-        const count = Object.keys(peers).length;
-        this.callbacks?.onPeerCountChange?.(count);
-      });
+      const unsubPeers = onValue(
+        peersRef,
+        (snapshot) => {
+          const peers = snapshot.val() || {};
+          const count = Object.keys(peers).length;
+          this.callbacks?.onPeerCountChange?.(count);
+        },
+        (err) => {
+          console.warn('[WebRTC RTDB] peersRef listener error:', err);
+          this.callbacks?.onSignalingStatus?.({
+            rtdbConnected: false,
+            error: err.message,
+          });
+        }
+      );
       this.unsubscribers.push(unsubPeers);
 
       // 3. Listen to synchronized chat/sign/voice messages
-      const unsubMessages = onChildAdded(messagesRef, (snapshot) => {
-        const msg = snapshot.val() as RoomChatMessage;
-        if (msg && msg.senderId !== this.clientId) {
-          this.callbacks?.onMessage?.(msg);
+      const unsubMessages = onChildAdded(
+        messagesRef,
+        (snapshot) => {
+          const msg = snapshot.val() as RoomChatMessage;
+          if (msg && msg.senderId !== this.clientId) {
+            this.callbacks?.onMessage?.(msg);
+          }
+        },
+        (err) => {
+          console.warn('[WebRTC RTDB] messagesRef listener error:', err);
         }
-      });
+      );
       this.unsubscribers.push(unsubMessages);
 
       // 4. Check existing offer in Realtime Database
@@ -360,67 +376,91 @@ export class WebRTCService {
         });
 
         // Listen for callee answer in RTDB
-        const unsubAnswer = onValue(answerRef, async (snapshot) => {
-          const ansData = snapshot.val();
-          if (ansData && ansData.senderId !== this.clientId && ansData.sdpInit) {
-            if (pc.signalingState === 'have-local-offer') {
-              try {
-                await pc.setRemoteDescription(new RTCSessionDescription(ansData.sdpInit));
-                await this.flushQueuedCandidates(pc);
-              } catch (err) {
-                console.warn('[WebRTC RTDB] Set remote answer error:', err);
+        const unsubAnswer = onValue(
+          answerRef,
+          async (snapshot) => {
+            const ansData = snapshot.val();
+            if (ansData && ansData.senderId !== this.clientId && ansData.sdpInit) {
+              if (pc.signalingState === 'have-local-offer') {
+                try {
+                  await pc.setRemoteDescription(new RTCSessionDescription(ansData.sdpInit));
+                  await this.flushQueuedCandidates(pc);
+                } catch (err) {
+                  console.warn('[WebRTC RTDB] Set remote answer error:', err);
+                }
               }
             }
+          },
+          (err) => {
+            console.warn('[WebRTC RTDB] answerRef listener error:', err);
           }
-        });
+        );
         this.unsubscribers.push(unsubAnswer);
       }
 
       // 5. Watch for incoming offers (if both peers joined simultaneously or offer updated)
-      const unsubOffer = onValue(offerRef, async (snapshot) => {
-        const off = snapshot.val();
-        if (!off || off.senderId === this.clientId || !off.sdpInit) return;
-        if (this.hasAnswered || pc.signalingState !== 'stable') return;
+      const unsubOffer = onValue(
+        offerRef,
+        async (snapshot) => {
+          const off = snapshot.val();
+          if (!off || off.senderId === this.clientId || !off.sdpInit) return;
+          if (this.hasAnswered || pc.signalingState !== 'stable') return;
 
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(off.sdpInit));
-          await this.flushQueuedCandidates(pc);
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(off.sdpInit));
+            await this.flushQueuedCandidates(pc);
 
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.hasAnswered = true;
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            this.hasAnswered = true;
 
-          await set(answerRef, {
-            sdpInit: { type: answer.type, sdp: answer.sdp },
-            senderId: this.clientId,
-            timestamp: Date.now(),
-          });
+            await set(answerRef, {
+              sdpInit: { type: answer.type, sdp: answer.sdp },
+              senderId: this.clientId,
+              timestamp: Date.now(),
+            });
 
-          this.broadcastChannel?.postMessage({
-            type: 'answer',
-            senderId: this.clientId,
-            answer,
-          });
-        } catch (err) {
-          console.warn('[WebRTC RTDB] Dynamic offer set error:', err);
+            this.broadcastChannel?.postMessage({
+              type: 'answer',
+              senderId: this.clientId,
+              answer,
+            });
+          } catch (err) {
+            console.warn('[WebRTC RTDB] Dynamic offer set error:', err);
+          }
+        },
+        (err) => {
+          console.warn('[WebRTC RTDB] offerRef listener error:', err);
         }
-      });
-      this.unsubscribers.push(unOfferWrapper(unsubOffer));
+      );
+      this.unsubscribers.push(unsubOffer);
 
       // 6. Watch for incoming ICE candidates across peers in RTDB
-      const unsubCandidatesGroup = onChildAdded(candidatesRef, (peerCandSnapshot) => {
-        const peerId = peerCandSnapshot.key;
-        if (!peerId || peerId === this.clientId) return;
+      const unsubCandidatesGroup = onChildAdded(
+        candidatesRef,
+        (peerCandSnapshot) => {
+          const peerId = peerCandSnapshot.key;
+          if (!peerId || peerId === this.clientId) return;
 
-        const peerCandRef = ref(db, `${roomPath}/candidates/${peerId}`);
-        const unsubPeerCands = onChildAdded(peerCandRef, (cSnap) => {
-          const c = cSnap.val();
-          if (c) {
-            this.addOrQueueCandidate(pc, c);
-          }
-        });
-        this.unsubscribers.push(unsubPeerCands);
-      });
+          const peerCandRef = ref(db, `${roomPath}/candidates/${peerId}`);
+          const unsubPeerCands = onChildAdded(
+            peerCandRef,
+            (cSnap) => {
+              const c = cSnap.val();
+              if (c) {
+                this.addOrQueueCandidate(pc, c);
+              }
+            },
+            (err) => {
+              console.warn('[WebRTC RTDB] peerCandRef error:', err);
+            }
+          );
+          this.unsubscribers.push(unsubPeerCands);
+        },
+        (err) => {
+          console.warn('[WebRTC RTDB] candidatesRef error:', err);
+        }
+      );
       this.unsubscribers.push(unsubCandidatesGroup);
     } catch (err: unknown) {
       const errorObj = err as Error;
@@ -567,10 +607,6 @@ export class WebRTCService {
   public getClientId(): string {
     return this.clientId;
   }
-}
-
-function unOfferWrapper(fn: () => void): () => void {
-  return fn;
 }
 
 export const webRTCService = new WebRTCService();

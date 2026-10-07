@@ -1,6 +1,19 @@
 {
   "rules": {
     ".read": true,
-    ".write": true
+    ".write": true,
+    "rooms": {
+      ".read": true,
+      ".write": true,
+      "$roomId": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["timestamp", "joinedAt"]
+      }
+    },
+    "invites": {
+      ".read": true,
+      ".write": true
+    }
   }
 }
