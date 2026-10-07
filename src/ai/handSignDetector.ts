@@ -35,10 +35,19 @@ export class HandSignDetector {
     this.initMediaPipe();
     this.checkFastApiHealth();
 
-    // Check FastAPI health periodically
+    // Check FastAPI health only with exponential backoff if running locally
     if (typeof window !== 'undefined') {
-      this.checkServerTimer = window.setInterval(() => this.checkFastApiHealth(), 4000);
+      this.checkServerTimer = window.setInterval(() => this.checkFastApiHealth(), 15000);
     }
+  }
+
+  private getFastApiBaseUrl(): string {
+    const custom = import.meta.env.VITE_AI_API_BASE_URL;
+    if (custom) return custom;
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    return isLocalhost ? 'http://localhost:8000' : '';
   }
 
   /**
@@ -79,20 +88,41 @@ export class HandSignDetector {
   }
 
   /**
-   * Periodically checks if the FastAPI model server (running SignMate_stage1_best.keras) is online
+   * Probes if the optional FastAPI model server is online.
+   * If offline or on a remote LAN without FastAPI, gracefully stops continuous probing.
    */
   public async checkFastApiHealth(): Promise<boolean> {
-    const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+    const baseUrl = this.getFastApiBaseUrl();
+    if (!baseUrl) {
+      this.isFastApiAvailable = false;
+      if (this.checkServerTimer) {
+        window.clearInterval(this.checkServerTimer);
+        this.checkServerTimer = null;
+      }
+      return false;
+    }
+
     try {
-      const res = await fetch(`http://${host}:8000/`, { method: 'GET', signal: AbortSignal.timeout(1000) });
+      const res = await fetch(`${baseUrl}/`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(500),
+      });
       if (res.ok) {
         this.isFastApiAvailable = true;
         return true;
       }
     } catch {
-      // Offline
+      // Server offline - client-side MediaPipe landmark engine will handle detection
     }
+
     this.isFastApiAvailable = false;
+
+    // Stop recurring timer if server is offline to eliminate console ERR_CONNECTION_TIMED_OUT errors
+    if (this.checkServerTimer) {
+      window.clearInterval(this.checkServerTimer);
+      this.checkServerTimer = null;
+    }
+
     return false;
   }
 
@@ -178,8 +208,8 @@ export class HandSignDetector {
 
     // 1. Try Live FastAPI Server (SignMate_stage1_best.keras) if online
     const now = performance.now();
-    const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
-    if (this.isFastApiAvailable && now - this.lastFastApiTime > 200 && this.offscreenCtx) {
+    const baseUrl = this.getFastApiBaseUrl();
+    if (this.isFastApiAvailable && baseUrl && now - this.lastFastApiTime > 200 && this.offscreenCtx) {
       this.lastFastApiTime = now;
       try {
         this.offscreenCtx.fillStyle = '#000000';
@@ -197,7 +227,7 @@ export class HandSignDetector {
         );
 
         const base64 = this.offscreenCanvas.toDataURL('image/jpeg', 0.85);
-        const res = await fetch(`http://${host}:8000/api/v1/predict/base64`, {
+        const res = await fetch(`${baseUrl}/api/v1/predict/base64`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_base64: base64 }),
