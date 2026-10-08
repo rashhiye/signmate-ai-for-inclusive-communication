@@ -14,6 +14,7 @@ import {
   UserCheck,
   User,
   LogOut,
+  Camera,
 } from 'lucide-react';
 
 interface UserSidebarProps {
@@ -32,6 +33,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
 
   const navItems = [
     { label: 'HOME', to: '/dashboard', icon: <Home className="w-4 h-4" /> },
+    { label: 'PRACTICE SIGNS', to: '/user/offline-detection', icon: <Camera className="w-4 h-4 text-emerald-400" /> },
     { label: 'CHANGE PASSWORD', to: '/user/change-password', icon: <Key className="w-4 h-4" /> },
     { label: 'VIEW USERS', to: '/user/find-users', icon: <Users className="w-4 h-4" /> },
     { label: 'VIEW MY REQ', to: '/user/requests', icon: <Send className="w-4 h-4" /> },

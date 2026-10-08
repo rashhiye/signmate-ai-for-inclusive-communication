@@ -24,6 +24,7 @@ import { UserRequestsPage } from './pages/user/UserRequestsPage';
 import { UserComplaintsPage } from './pages/user/UserComplaintsPage';
 import { UserFeedbackPage } from './pages/user/UserFeedbackPage';
 import { UserProfilePage } from './pages/user/UserProfilePage';
+import { UserOfflineDetectionPage } from './pages/user/UserOfflineDetectionPage';
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
@@ -55,12 +56,14 @@ const AppLayout: React.FC = () => {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/User/register" element={<RegisterPage />} />
           <Route path="/forgotemail" element={<SecurityPage />} />
+          <Route path="/forgot-password" element={<SecurityPage />} />
+          <Route path="/forgotpassword" element={<SecurityPage />} />
 
           {/* User Home Dashboard (Screenshot Page 66) */}
           <Route path="/dashboard" element={<DashboardPage />} />
 
           {/* User Portal Modules */}
-          <Route path="/user/offline-detection" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/user/offline-detection" element={<UserOfflineDetectionPage />} />
           <Route path="/user/learning" element={<Navigate to="/dashboard" replace />} />
           <Route path="/user/change-password" element={<SecurityPage />} />
           <Route path="/user/find-users" element={<UserDirectoryPage />} />

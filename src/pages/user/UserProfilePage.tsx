@@ -41,7 +41,7 @@ export const UserProfilePage: React.FC = () => {
         <div className="border-b border-white/5 pb-4">
           <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white flex items-center gap-2">
             <User className="w-6 h-6 text-purple-400" />
-            <span>Personal Profile (Section 4.1)</span>
+            <span>Personal Profile & Details</span>
           </h1>
           <p className="text-xs text-[#8e94a0] mt-0.5">
             Manage your personal profile and visibility status across the SignMate network.

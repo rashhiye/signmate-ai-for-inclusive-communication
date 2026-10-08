@@ -20,6 +20,7 @@ import {
   LogOut,
   PlusCircle,
   Hash,
+  Camera,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -34,6 +35,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const dashboardActions = [
+    { label: 'PRACTICE SIGNS', icon: <Camera className="w-5 h-5 text-emerald-400" />, action: () => navigate('/user/offline-detection') },
     { label: 'FIND USERS', icon: <Users className="w-5 h-5 text-sky-400" />, action: () => navigate('/user/find-users') },
     { label: 'MY FRIENDS', icon: <UserCheck className="w-5 h-5 text-emerald-400" />, action: () => navigate('/user/friends') },
     { label: 'SENT REQUESTS', icon: <Send className="w-5 h-5 text-indigo-400" />, action: () => navigate('/user/requests?tab=sent') },
