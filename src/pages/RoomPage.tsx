@@ -444,12 +444,12 @@ export const RoomPage: React.FC = () => {
       </header>
 
       {/* Network Origin Insecure Context Banner */}
-      {deviceError === 'INSECURE_NETWORK_ORIGIN' && (
+      {(deviceError === 'INSECURE_NETWORK_ORIGIN' || deviceError === 'CAMERA_BLOCKED_HTTP_IP') && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 shrink-0 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
             <span>
-              Browsing via HTTP IP (<strong>{window.location.hostname}</strong>). Browsers require HTTPS or localhost to enable the camera.
+              Browsing via Network IP (<strong>{window.location.hostname}</strong>). Browsers require localhost or Chrome flag to enable camera over plain HTTP.
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -457,24 +457,13 @@ export const RoomPage: React.FC = () => {
               type="button"
               onClick={() => {
                 const u = new URL(window.location.href);
-                u.protocol = 'https:';
-                window.location.href = u.toString();
-              }}
-              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition-colors shrink-0 shadow flex items-center gap-1.5 cursor-pointer"
-            >
-              <VideoIcon className="w-3.5 h-3.5" />
-              <span>Switch to HTTPS</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const u = new URL(window.location.href);
                 u.hostname = 'localhost';
                 window.location.href = u.toString();
               }}
-              className="px-3 py-1.5 rounded-lg bg-[#2b2d35] hover:bg-[#383b45] text-surface-200 font-semibold text-xs transition-colors shrink-0 border border-white/10 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors shrink-0 shadow flex items-center gap-1.5 cursor-pointer"
             >
-              <span>Use localhost</span>
+              <VideoIcon className="w-3.5 h-3.5" />
+              <span>Use localhost (Camera Allowed)</span>
             </button>
           </div>
         </div>
@@ -507,7 +496,7 @@ export const RoomPage: React.FC = () => {
 
               {(!isCameraEnabled || !localStream) && (
                 <div className="flex flex-col items-center justify-center p-6 text-center select-none text-surface-400 z-10 max-w-sm">
-                  {deviceError === 'INSECURE_NETWORK_ORIGIN' || (deviceError && deviceError.includes('HTTPS')) || (typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') ? (
+                  {deviceError === 'CAMERA_BLOCKED_HTTP_IP' || deviceError === 'INSECURE_NETWORK_ORIGIN' || (deviceError && deviceError.includes('HTTPS')) || (typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') ? (
                     <div className="p-4 rounded-2xl bg-[#16181e]/95 border border-amber-500/30 text-center shadow-2xl backdrop-blur-md">
                       <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-3 text-amber-400">
                         <VideoOff className="w-6 h-6" />
@@ -521,13 +510,13 @@ export const RoomPage: React.FC = () => {
                           type="button"
                           onClick={() => {
                             const u = new URL(window.location.href);
-                            u.protocol = 'https:';
+                            u.hostname = 'localhost';
                             window.location.href = u.toString();
                           }}
-                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <VideoIcon className="w-4 h-4" />
-                          <span>1-Click Fix: Switch to HTTPS</span>
+                          <span>Open on localhost (Camera Allowed)</span>
                         </button>
                         <button
                           type="button"
@@ -548,13 +537,19 @@ export const RoomPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            const u = new URL(window.location.href);
-                            u.hostname = 'localhost';
-                            window.location.href = u.toString();
+                            const flagValue = `http://${window.location.host}`;
+                            navigator.clipboard.writeText(flagValue).then(() => {
+                              showToast({
+                                type: 'success',
+                                title: 'Copied to Clipboard!',
+                                message: `Copied "${flagValue}". Paste it into Chrome flags.`,
+                              });
+                            });
                           }}
                           className="w-full py-2 px-4 rounded-xl bg-[#2b2d35] hover:bg-[#383b45] text-surface-200 text-xs font-semibold border border-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <span>Open on localhost (This PC)</span>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Origin for Chrome Flag</span>
                         </button>
                       </div>
                       <div className="mt-3 p-2 rounded-xl bg-black/40 border border-white/5 text-[10px] text-surface-400 text-left">

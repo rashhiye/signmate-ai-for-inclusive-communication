@@ -58,10 +58,10 @@ export function useMediaDevices(): UseMediaDevicesResult {
       (navigator as any).getUserMedia
     );
 
-    // If browser completely strips media APIs on HTTP network IP, seamlessly upgrade to HTTPS
-    if (!hasMedia && window.isSecureContext === false && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      console.warn('[SignMate] Browser hides camera API on unencrypted HTTP IP. Upgrading to HTTPS...');
-      window.location.href = window.location.href.replace('http:', 'https:');
+    if (!hasMedia && window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setDeviceError('CAMERA_BLOCKED_HTTP_IP');
+      setCameraAvailable(false);
+      setMicAvailable(false);
       return;
     }
 
@@ -145,11 +145,8 @@ export function useMediaDevices(): UseMediaDevicesResult {
               audio: false,
             });
           } catch (tier3Err) {
-            // If completely blocked by browser on plain HTTP, upgrade to HTTPS
-            if (window.isSecureContext === false && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-              console.warn('[SignMate] Camera blocked on HTTP IP. Upgrading to HTTPS...');
-              window.location.href = window.location.href.replace('http:', 'https:');
-              return null;
+            if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+              throw new Error('CAMERA_BLOCKED_HTTP_IP');
             }
             throw tier3Err;
           }
@@ -193,9 +190,9 @@ export function useMediaDevices(): UseMediaDevicesResult {
       } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
         errorMsg = 'No camera found. Please plug in or enable a webcam.';
       } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        errorMsg = 'Camera is occupied by another application (e.g. Zoom or another browser tab).';
-      } else if (error.message === 'NOT_SUPPORTED') {
-        errorMsg = 'Camera access requires HTTPS or localhost on this browser.';
+        errorMsg = 'Webcam is currently in use by another application. Please close Zoom/Teams/other tabs and retry.';
+      } else if (error.message === 'CAMERA_BLOCKED_HTTP_IP' || error.message === 'NOT_SUPPORTED') {
+        errorMsg = 'CAMERA_BLOCKED_HTTP_IP';
       } else if (error.message) {
         errorMsg = error.message;
       }
