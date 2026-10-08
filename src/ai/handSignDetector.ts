@@ -213,7 +213,25 @@ export class HandSignDetector {
       height: (maxY - minY) * vh,
     };
 
-    // 1. Try Live FastAPI Server (SignMate_stage1_best.keras) if online
+    // 1. High-Accuracy 3D Landmark Geometric Classifier (A–Z)
+    const landmarkResult = this.classifyLandmarks(landmarks);
+
+    // If landmark engine found a confident match (confidence >= 0.85), return it immediately
+    if (landmarkResult.letter && landmarkResult.confidence >= 0.85) {
+      const res: HandDetectionResult = {
+        hasHand: true,
+        box,
+        letter: landmarkResult.letter,
+        confidence: landmarkResult.confidence,
+        inferenceTimeMs: Math.round(performance.now() - startTime),
+        source: 'mediapipe_landmarks',
+        landmarks,
+      };
+      this.lastDetectionResult = res;
+      return res;
+    }
+
+    // 2. Secondary booster: Try Live FastAPI Server (SignMate_stage1_best.keras) if online
     const now = performance.now();
     const baseUrl = this.getFastApiBaseUrl();
     if (this.isFastApiAvailable && baseUrl && now - this.lastFastApiTime > 200 && this.offscreenCtx) {
@@ -244,7 +262,7 @@ export class HandSignDetector {
         if (res.ok) {
           const json = await res.json();
           const label = json.label;
-          // Accept Keras prediction only if high confidence and anatomically valid against MediaPipe landmarks
+          // Accept Keras prediction only if high confidence and strictly anatomically verified
           if (label && label !== '0' && json.confidence >= 0.70) {
             const isValid = this.isPredictionAnatomicallyValid(label, landmarks);
             if (isValid) {
@@ -263,24 +281,21 @@ export class HandSignDetector {
           }
         }
       } catch {
-        // Fall through to 3D landmark geometric classification
+        // Fall through to landmark result
       }
     }
 
-    // 2. High-Accuracy 3D Landmark Geometric Classifier (A–Z)
-    const { letter, confidence } = this.classifyLandmarks(landmarks);
-
-    const landmarkResult: HandDetectionResult = {
+    const fallbackResult: HandDetectionResult = {
       hasHand: true,
       box,
-      letter,
-      confidence,
+      letter: landmarkResult.letter,
+      confidence: landmarkResult.confidence,
       inferenceTimeMs: Math.round(performance.now() - startTime),
       source: 'mediapipe_landmarks',
       landmarks,
     };
-    this.lastDetectionResult = landmarkResult;
-    return landmarkResult;
+    this.lastDetectionResult = fallbackResult;
+    return fallbackResult;
   }
 
   /**
@@ -291,47 +306,67 @@ export class HandSignDetector {
     const wrist = lm[0];
     const palmScale = Math.hypot(lm[9].x - wrist.x, lm[9].y - wrist.y) || 0.2;
 
-    const isIndexCurled = this.dist(lm[8], lm[5]) < palmScale * 0.70 || lm[8].y >= lm[6].y - palmScale * 0.05;
-    const isMiddleCurled = this.dist(lm[12], lm[9]) < palmScale * 0.70 || lm[12].y >= lm[10].y - palmScale * 0.05;
-    const isRingCurled = this.dist(lm[16], lm[13]) < palmScale * 0.70 || lm[16].y >= lm[14].y - palmScale * 0.05;
-    const isPinkyCurled = this.dist(lm[20], lm[17]) < palmScale * 0.70 || lm[20].y >= lm[18].y - palmScale * 0.05;
+    const isFingerCurled = (tipIdx: number, pipIdx: number, mcpIdx: number) => {
+      const dTipMcp = this.dist(lm[tipIdx], lm[mcpIdx]);
+      const dPipMcp = this.dist(lm[pipIdx], lm[mcpIdx]) || 0.001;
+      const dTipWrist = this.dist(lm[tipIdx], wrist);
+      const dPipWrist = this.dist(lm[pipIdx], wrist);
+      return (
+        dTipMcp / dPipMcp <= 1.25 ||
+        lm[tipIdx].y >= lm[pipIdx].y - palmScale * 0.02 ||
+        dTipWrist <= dPipWrist * 1.05
+      );
+    };
+
+    const isIndexCurled = isFingerCurled(8, 6, 5);
+    const isMiddleCurled = isFingerCurled(12, 10, 9);
+    const isRingCurled = isFingerCurled(16, 14, 13);
+    const isPinkyCurled = isFingerCurled(20, 18, 17);
     const isAllCurled = isIndexCurled && isMiddleCurled && isRingCurled && isPinkyCurled;
 
-    // 'B' requires all 4 fingers extended straight UP
+    const isIndexUp = lm[8].y < lm[6].y && this.dist(lm[8], lm[5]) > this.dist(lm[6], lm[5]) * 1.25;
+    const isMiddleUp = lm[12].y < lm[10].y && this.dist(lm[12], lm[9]) > this.dist(lm[10], lm[9]) * 1.25;
+    const isRingUp = lm[16].y < lm[14].y && this.dist(lm[16], lm[13]) > this.dist(lm[14], lm[13]) * 1.25;
+    const isPinkyUp = lm[20].y < lm[18].y && this.dist(lm[20], lm[17]) > this.dist(lm[18], lm[17]) * 1.20;
+
+    // 'B' requires ALL 4 fingers extended straight UP, never curled
     if (label === 'B') {
       return (
         !isAllCurled &&
-        lm[8].y < lm[6].y &&
-        lm[12].y < lm[10].y &&
-        lm[16].y < lm[14].y &&
-        lm[20].y < lm[18].y &&
-        this.dist(lm[8], lm[5]) > palmScale * 0.72
+        isIndexUp &&
+        isMiddleUp &&
+        isRingUp &&
+        isPinkyUp &&
+        !isIndexCurled &&
+        !isMiddleCurled &&
+        !isRingCurled &&
+        !isPinkyCurled
       );
     }
 
     // 'W' requires index, middle, ring extended UP
     if (label === 'W') {
-      return !isIndexCurled && !isMiddleCurled && !isRingCurled;
+      return !isIndexCurled && !isMiddleCurled && !isRingCurled && isIndexUp && isMiddleUp && isRingUp;
     }
 
-    // 'V', 'U', 'R', 'K' require index and middle extended
+    // 'V', 'U', 'R', 'K' require index and middle extended UP
     if (['V', 'U', 'R', 'K'].includes(label)) {
-      return !isIndexCurled && !isMiddleCurled;
+      return isIndexUp && isMiddleUp && !isIndexCurled && !isMiddleCurled;
     }
 
-    // 'L', 'D' require index extended
+    // 'L', 'D' require index extended UP
     if (['L', 'D'].includes(label)) {
-      return !isIndexCurled;
+      return isIndexUp && !isIndexCurled;
     }
 
-    // 'I', 'Y' require pinky extended
+    // 'I', 'Y' require pinky extended UP
     if (['I', 'Y'].includes(label)) {
-      return !isPinkyCurled;
+      return isPinkyUp && !isPinkyCurled;
     }
 
-    // Fist letters ('A', 'E', 'M', 'N', 'S', 'T') require all fingers curled
+    // Fist letters ('A', 'E', 'M', 'N', 'S', 'T') require fingers curled
     if (['A', 'E', 'M', 'N', 'S', 'T'].includes(label)) {
-      return isAllCurled;
+      return isAllCurled || (isIndexCurled && isMiddleCurled);
     }
 
     return true;
@@ -353,253 +388,177 @@ export class HandSignDetector {
     const wrist = lm[0];
     const palmScale = Math.hypot(lm[9].x - wrist.x, lm[9].y - wrist.y) || 0.2;
 
-    // Helper: is finger extended UP (tip higher than PIP, PIP higher than MCP, large distance from MCP to TIP)
-    const isFingerUp = (tipIdx: number, pipIdx: number, mcpIdx: number) => {
+    // Self-normalizing finger evaluation helper
+    const evalFinger = (tipIdx: number, pipIdx: number, mcpIdx: number) => {
+      const dTipMcp = this.dist(lm[tipIdx], lm[mcpIdx]);
+      const dPipMcp = this.dist(lm[pipIdx], lm[mcpIdx]) || 0.001;
       const dTipWrist = this.dist(lm[tipIdx], wrist);
       const dPipWrist = this.dist(lm[pipIdx], wrist);
-      const dTipMcp = this.dist(lm[tipIdx], lm[mcpIdx]);
-      return (
-        lm[tipIdx].y < lm[pipIdx].y &&
-        lm[pipIdx].y < lm[mcpIdx].y + palmScale * 0.15 &&
-        dTipMcp > palmScale * 0.72 &&
-        dTipWrist > dPipWrist * 1.05
-      );
+
+      const isExtended = dTipMcp / dPipMcp > 1.25 && dTipWrist > dPipWrist * 1.04;
+      const isUp = isExtended && lm[tipIdx].y < lm[pipIdx].y;
+      const isCurled =
+        dTipMcp / dPipMcp <= 1.22 ||
+        dTipWrist <= dPipWrist * 1.05 ||
+        lm[tipIdx].y >= lm[pipIdx].y - palmScale * 0.02;
+
+      return {
+        isExtended,
+        isUp,
+        isCurled,
+        dTipMcp,
+        dTipWrist,
+        pipRaised: lm[mcpIdx].y - lm[pipIdx].y > palmScale * 0.28,
+      };
     };
 
-    // Helper: is finger curled into palm
-    const isFingerCurled = (tipIdx: number, pipIdx: number, mcpIdx: number) => {
-      const dTipMcp = this.dist(lm[tipIdx], lm[mcpIdx]);
-      const dTipWrist = this.dist(lm[tipIdx], wrist);
-      const dPipWrist = this.dist(lm[pipIdx], wrist);
-      return (
-        dTipMcp < palmScale * 0.70 ||
-        lm[tipIdx].y >= lm[pipIdx].y - palmScale * 0.05 ||
-        dTipWrist <= dPipWrist * 1.05
-      );
-    };
-
-    // Helper: is finger extended generally (either up, horizontal, or angled)
-    const isFingerExtended = (tipIdx: number, pipIdx: number, mcpIdx: number) => {
-      const dTipMcp = this.dist(lm[tipIdx], lm[mcpIdx]);
-      const dTipWrist = this.dist(lm[tipIdx], wrist);
-      const dPipWrist = this.dist(lm[pipIdx], wrist);
-      return dTipMcp > palmScale * 0.72 && dTipWrist > dPipWrist * 1.05;
-    };
-
-    const isIndexUp = isFingerUp(8, 6, 5);
-    const isMiddleUp = isFingerUp(12, 10, 9);
-    const isRingUp = isFingerUp(16, 14, 13);
-    const isPinkyUp = isFingerUp(20, 18, 17);
-
-    const isIndexExt = isFingerExtended(8, 6, 5);
-    const isMiddleExt = isFingerExtended(12, 10, 9);
-
-    const isIndexCurled = isFingerCurled(8, 6, 5);
-    const isMiddleCurled = isFingerCurled(12, 10, 9);
-    const isRingCurled = isFingerCurled(16, 14, 13);
-    const isPinkyCurled = isFingerCurled(20, 18, 17);
+    const fIndex = evalFinger(8, 6, 5);
+    const fMiddle = evalFinger(12, 10, 9);
+    const fRing = evalFinger(16, 14, 13);
+    const fPinky = evalFinger(20, 18, 17);
 
     // Thumb geometry
-    const isThumbUp = lm[4].y < lm[3].y && lm[4].y < lm[2].y;
-    const isThumbExtOut =
-      this.dist(lm[4], lm[2]) > palmScale * 0.60 &&
-      this.dist(lm[4], lm[9]) > palmScale * 0.58;
-    const isThumbAcrossPalm =
-      this.dist(lm[4], lm[13]) < palmScale * 0.65 ||
-      this.dist(lm[4], lm[9]) < palmScale * 0.58;
-
     const dThumbIndex = this.dist(lm[4], lm[8]) / palmScale;
     const dThumbMiddle = this.dist(lm[4], lm[12]) / palmScale;
+    const dThumbMcp5 = this.dist(lm[4], lm[5]) / palmScale;
+
+    const isThumbUp = lm[4].y < lm[3].y + palmScale * 0.05 && lm[4].y < lm[2].y;
+    const isThumbExtOut =
+      this.dist(lm[4], lm[2]) > palmScale * 0.50 &&
+      this.dist(lm[4], lm[9]) > palmScale * 0.50;
+    const isThumbAcrossPalm =
+      this.dist(lm[4], lm[13]) < palmScale * 0.65 ||
+      this.dist(lm[4], lm[9]) < palmScale * 0.60;
+
     const dIndexMiddle = this.dist(lm[8], lm[12]) / palmScale;
 
-    // Relative vector from knuckle to tip for index and middle
+    // Relative vectors for horizontal checks
     const dxIndex = lm[8].x - lm[5].x;
     const dyIndex = lm[8].y - lm[5].y;
     const dxMiddle = lm[12].x - lm[9].x;
     const dyMiddle = lm[12].y - lm[9].y;
 
-    const isIndexPointingDown = dyIndex > palmScale * 0.22;
-    const isIndexHorizontal = Math.abs(dxIndex) > Math.abs(dyIndex) * 0.8 && Math.abs(dxIndex) > palmScale * 0.45;
-    const isMiddleHorizontal = Math.abs(dxMiddle) > Math.abs(dyMiddle) * 0.8 && Math.abs(dxMiddle) > palmScale * 0.45;
+    const isIndexPointingDown = dyIndex > palmScale * 0.20;
+    const isIndexHorizontal = Math.abs(dxIndex) > Math.abs(dyIndex) * 0.70 && Math.abs(dxIndex) > palmScale * 0.35;
+    const isMiddleHorizontal = Math.abs(dxMiddle) > Math.abs(dyMiddle) * 0.70 && Math.abs(dxMiddle) > palmScale * 0.35;
 
-    // Hooked index finger ('X': knuckle raised, but tip bent down)
+    // Hooked index finger ('X': Knuckle PIP raised high, but tip bent down)
     const isIndexHooked =
-      !isIndexUp &&
-      this.dist(lm[6], wrist) > this.dist(lm[5], wrist) * 1.05 &&
+      fIndex.pipRaised &&
       (lm[8].y > lm[6].y || this.dist(lm[8], lm[5]) < this.dist(lm[6], lm[5]) * 1.35) &&
-      isMiddleCurled && isRingCurled && isPinkyCurled;
+      fMiddle.isCurled &&
+      fRing.isCurled &&
+      fPinky.isCurled;
 
     // ==========================================
     // 1. ALL 4 FINGERS EXTENDED UP (B or 5)
     // ==========================================
-    if (isIndexUp && isMiddleUp && isRingUp && isPinkyUp) {
-      // '5': All 5 fingers extended outward
+    if (fIndex.isUp && fMiddle.isUp && fRing.isUp && fPinky.isUp) {
       if (isThumbExtOut) {
         return { letter: '5', confidence: 0.98 };
       }
-      // 'B': All 4 fingers straight up together, thumb folded across palm
       return { letter: 'B', confidence: 0.98 };
     }
 
     // ==========================================
-    // 2. 3 FINGERS EXTENDED UP (W)
+    // 2. 3 FINGERS EXTENDED UP (W, F)
     // ==========================================
-    if (isIndexUp && isMiddleUp && isRingUp && isPinkyCurled) {
-      // 'W': Index, Middle, Ring extended straight up, Pinky curled
+    if (dThumbIndex < 0.45 && fMiddle.isUp && fRing.isUp && fPinky.isUp) {
+      return { letter: 'F', confidence: 0.98 };
+    }
+
+    if (fIndex.isUp && fMiddle.isUp && fRing.isUp && fPinky.isCurled) {
       return { letter: 'W', confidence: 0.98 };
     }
 
     // ==========================================
-    // 3. CIRCULAR / ARCHED SHAPES (F, O, C)
+    // 3. TWO FINGERS (Index + Middle) EXTENDED (V, U, R, K, H, P)
     // ==========================================
-
-    // 'F': "OK" sign - Thumb tip touches Index tip, other 3 fingers extended UP
-    if (dThumbIndex < 0.45 && isMiddleUp && isRingUp && isPinkyUp) {
-      return { letter: 'F', confidence: 0.98 };
-    }
-
-    // 'O': All fingers curved down with tips touching thumb tip forming a circle
-    if (
-      dThumbIndex < 0.48 &&
-      dThumbMiddle < 0.52 &&
-      isRingCurled &&
-      isPinkyCurled &&
-      !isIndexUp &&
-      !isMiddleUp &&
-      this.dist(lm[4], lm[16]) / palmScale < 0.60
-    ) {
-      return { letter: 'O', confidence: 0.96 };
-    }
-
-    // 'C': Open arc / cup shape - fingers curved together, thumb opposite
-    if (
-      isIndexCurled &&
-      isMiddleCurled &&
-      isRingCurled &&
-      isPinkyCurled &&
-      dThumbIndex >= 0.35 &&
-      dThumbIndex <= 1.05 &&
-      !isThumbAcrossPalm &&
-      lm[8].y < lm[5].y + palmScale * 0.1
-    ) {
-      return { letter: 'C', confidence: 0.95 };
-    }
-
-    // ==========================================
-    // 4. TWO-FINGER COMBINATIONS (Index + Middle)
-    // ==========================================
-    if (isIndexExt && isMiddleExt && isRingCurled && isPinkyCurled) {
-      // 'P': Pointing downward with thumb between
+    if (fIndex.isExtended && fMiddle.isExtended && fRing.isCurled && fPinky.isCurled) {
       if (isIndexPointingDown && dyMiddle > palmScale * 0.18) {
         return { letter: 'P', confidence: 0.96 };
       }
-
-      // 'H': Extended horizontally side-by-side
-      if (isIndexHorizontal && isMiddleHorizontal && dIndexMiddle < 0.42) {
+      if (isIndexHorizontal && isMiddleHorizontal && dIndexMiddle < 0.45) {
         return { letter: 'H', confidence: 0.96 };
       }
-
-      // If pointing up:
-      if (isIndexUp && isMiddleUp) {
-        // 'R': Index and Middle crossed over each other
-        if (
-          (lm[8].x - lm[12].x) * (lm[5].x - lm[9].x) < 0 ||
-          dIndexMiddle < 0.18
-        ) {
+      if (fIndex.isUp && fMiddle.isUp) {
+        // 'R': Crossed fingers
+        if ((lm[8].x - lm[12].x) * (lm[5].x - lm[9].x) < 0 || dIndexMiddle < 0.16) {
           return { letter: 'R', confidence: 0.97 };
         }
-
-        // 'K': Thumb upright between index and middle knuckles
-        if (
-          (isThumbUp || this.dist(lm[4], lm[6]) < palmScale * 0.50) &&
-          !isThumbAcrossPalm &&
-          dIndexMiddle >= 0.20
-        ) {
+        // 'K': Thumb upright between index and middle
+        if ((isThumbUp || this.dist(lm[4], lm[6]) < palmScale * 0.48) && !isThumbAcrossPalm && dIndexMiddle >= 0.20) {
           return { letter: 'K', confidence: 0.96 };
         }
-
-        // 'V': Peace sign - fingers spread apart in 'V'
-        if (dIndexMiddle >= 0.24) {
+        // 'V': Spread apart
+        if (dIndexMiddle >= 0.22) {
           return { letter: 'V', confidence: 0.98 };
         }
-
-        // 'U': Index and Middle held together straight up
+        // 'U': Held together side-by-side
         return { letter: 'U', confidence: 0.97 };
       }
     }
 
     // ==========================================
-    // 5. SINGLE FINGER: PINKY ALONE (I, J, Y)
+    // 4. ONE FINGER: PINKY ALONE (I, J, Y)
     // ==========================================
-    if (isPinkyUp && isIndexCurled && isMiddleCurled && isRingCurled) {
-      // 'Y': Thumb and Pinky extended out (Shaka)
+    if (fPinky.isUp && fIndex.isCurled && fMiddle.isCurled && fRing.isCurled) {
       if (isThumbExtOut) {
         return { letter: 'Y', confidence: 0.98 };
       }
-
-      // 'J': Pinky angled / pointing downward / curving
       if (lm[20].y > lm[18].y || Math.abs(lm[20].x - lm[17].x) > palmScale * 0.5) {
         return { letter: 'J', confidence: 0.94 };
       }
-
-      // 'I': Pinky pointing straight up
       return { letter: 'I', confidence: 0.98 };
     }
 
     // ==========================================
-    // 6. SINGLE FINGER: INDEX ALONE (D, G, L, Q, X, Z)
+    // 5. ONE FINGER: INDEX ALONE (D, G, L, Q, X, Z)
     // ==========================================
-    if (isIndexExt && isMiddleCurled && isRingCurled && isPinkyCurled) {
-      // 'L': Index up, Thumb extended out horizontally at ~90°
-      if (isIndexUp && isThumbExtOut && dThumbIndex > 0.50 && !isIndexPointingDown) {
+    if (fIndex.isExtended && fMiddle.isCurled && fRing.isCurled && fPinky.isCurled) {
+      if (fIndex.isUp && isThumbExtOut && dThumbIndex > 0.45 && !isIndexPointingDown) {
         return { letter: 'L', confidence: 0.98 };
       }
-
-      // 'Q': Index pointing downward with thumb parallel down
       if (isIndexPointingDown && lm[4].y > lm[2].y) {
         return { letter: 'Q', confidence: 0.95 };
       }
-
-      // 'G': Index extended horizontally with thumb parallel
-      if (isIndexHorizontal && this.dist(lm[4], lm[8]) < palmScale * 0.82) {
+      if (isIndexHorizontal && this.dist(lm[4], lm[8]) < palmScale * 0.85) {
         return { letter: 'G', confidence: 0.96 };
       }
-
-      // 'Z': Index pointing forward / tilted horizontally
-      if (isThumbAcrossPalm && Math.abs(dxIndex) > Math.abs(dyIndex) * 0.7) {
+      if (isThumbAcrossPalm && Math.abs(dxIndex) > Math.abs(dyIndex) * 0.70) {
         return { letter: 'Z', confidence: 0.94 };
       }
-
-      // 'D': Index pointing straight up, thumb touching middle finger tip/knuckle
-      if (isIndexUp && (dThumbMiddle < 0.55 || this.dist(lm[4], lm[10]) < palmScale * 0.52 || !isThumbExtOut)) {
+      if (fIndex.isUp && (dThumbMiddle < 0.55 || this.dist(lm[4], lm[10]) < palmScale * 0.52 || !isThumbExtOut)) {
         return { letter: 'D', confidence: 0.97 };
       }
     }
 
-    // 'X': Index hooked into a crook, other 3 fingers curled
+    // 'X': Hooked index finger
     if (isIndexHooked) {
       return { letter: 'X', confidence: 0.96 };
     }
 
     // ==========================================
-    // 7. FIST VARIATIONS (A, E, M, N, S, T)
+    // 6. FIST LETTERS (A, E, M, N, S, T)
     // ==========================================
-    if (isIndexCurled && isMiddleCurled && isRingCurled && isPinkyCurled) {
-      // Knuckle line vector from Index MCP (5) to Pinky MCP (17)
-      const vx = lm[17].x - lm[5].x;
-      const vy = lm[17].y - lm[5].y;
-      const vLenSq = vx * vx + vy * vy || 0.001;
+    const curledCount =
+      (fIndex.isCurled ? 1 : 0) +
+      (fMiddle.isCurled ? 1 : 0) +
+      (fRing.isCurled ? 1 : 0) +
+      (fPinky.isCurled ? 1 : 0);
 
-      // Project thumb tip (4) onto knuckle line
-      const tx = lm[4].x - lm[5].x;
-      const ty = lm[4].y - lm[5].y;
-      const knuckleRatio = (tx * vx + ty * vy) / vLenSq;
+    const isClosedFist =
+      (curledCount >= 3 || (fIndex.isCurled && fMiddle.isCurled)) &&
+      !fIndex.isUp &&
+      !fMiddle.isUp &&
+      !fRing.isUp &&
+      !fPinky.isUp;
 
+    if (isClosedFist) {
       const dThumbIndexPip = this.dist(lm[4], lm[6]) / palmScale;
       const dThumbMiddlePip = this.dist(lm[4], lm[10]) / palmScale;
       const dThumbRingPip = this.dist(lm[4], lm[14]) / palmScale;
       const dThumbPinkyPip = this.dist(lm[4], lm[18]) / palmScale;
-      const dThumbIndexMcp = this.dist(lm[4], lm[5]) / palmScale;
 
       const dThumbIndexTip = this.dist(lm[4], lm[8]) / palmScale;
       const dThumbMiddleTip = this.dist(lm[4], lm[12]) / palmScale;
@@ -608,50 +567,75 @@ export class HandSignDetector {
       if (
         lm[4].y >= lm[8].y - palmScale * 0.05 &&
         dThumbIndexTip < 0.45 &&
-        dThumbMiddleTip < 0.48
+        dThumbMiddleTip < 0.48 &&
+        lm[4].y > lm[6].y + palmScale * 0.08
       ) {
         return { letter: 'E', confidence: 0.96 };
       }
 
-      // 'A': Thumb straight UP resting beside Index MCP (lateral side of fist)
-      if (isThumbUp && knuckleRatio <= 0.12 && dThumbIndexMcp < 0.65 && !isThumbAcrossPalm) {
+      // 'A': Thumb UP alongside outside lateral edge of index finger
+      if (
+        (isThumbUp || lm[4].y < lm[6].y + palmScale * 0.08) &&
+        dThumbMcp5 < 0.65 &&
+        dThumbRingPip > 0.42 &&
+        dThumbPinkyPip > 0.48
+      ) {
         return { letter: 'A', confidence: 0.98 };
       }
 
       // 'M': Thumb tucked under 3 fingers, peeking out between Ring and Pinky
       if (
-        knuckleRatio >= 0.60 ||
-        (dThumbRingPip < 0.50 && dThumbPinkyPip < 0.55 && dThumbPinkyPip < dThumbIndexPip)
+        dThumbPinkyPip <= dThumbIndexPip &&
+        dThumbRingPip <= dThumbIndexPip &&
+        (dThumbPinkyPip < 0.35 || (dThumbRingPip < 0.28 && dThumbPinkyPip < 0.38))
       ) {
         return { letter: 'M', confidence: 0.97 };
       }
 
       // 'N': Thumb tucked under 2 fingers, peeking out between Middle and Ring
       if (
-        (knuckleRatio >= 0.32 && knuckleRatio < 0.60 && lm[4].y <= lm[10].y + palmScale * 0.15) ||
-        (dThumbMiddlePip < 0.50 && dThumbRingPip < 0.52 && dThumbPinkyPip >= 0.32)
+        dThumbMiddlePip < 0.30 &&
+        dThumbRingPip < 0.30 &&
+        dThumbPinkyPip >= 0.28
       ) {
         return { letter: 'N', confidence: 0.97 };
       }
 
-      // 'T': Thumb tucked under ONLY Index finger, peeking UP between Index and Middle
+      // 'T': Thumb tucked under index finger ONLY, peeking UP between Index and Middle
       if (
-        (knuckleRatio >= 0.05 && knuckleRatio < 0.35 && lm[4].y <= lm[6].y + palmScale * 0.05) ||
-        (dThumbIndexPip < 0.46 && dThumbMiddlePip < 0.50 && lm[4].y <= lm[6].y + palmScale * 0.05)
+        dThumbIndexPip < 0.30 &&
+        dThumbMiddlePip < 0.30 &&
+        lm[4].y <= lm[6].y + palmScale * 0.05
       ) {
         return { letter: 'T', confidence: 0.97 };
       }
 
-      // 'S': Thumb wrapped horizontally across front of curled fingers (below knuckles)
-      if (dThumbIndexPip < 0.60 && dThumbMiddlePip < 0.60) {
+      // 'S': Thumb wrapped horizontally across front of fingers
+      if (dThumbIndexPip < 0.65 && dThumbMiddlePip < 0.65) {
         return { letter: 'S', confidence: 0.96 };
       }
 
-      // Fallback fist gesture: if thumb is lateral/up, 'A'; if across, 'S'
-      if (isThumbUp || knuckleRatio < 0.20) {
+      if (isThumbUp || dThumbMcp5 < 0.60) {
         return { letter: 'A', confidence: 0.85 };
       }
       return { letter: 'S', confidence: 0.85 };
+    }
+
+    // ==========================================
+    // 7. CIRCULAR / ARCHED SHAPES (C, O)
+    // ==========================================
+    if (fRing.isCurled && fPinky.isCurled && !fIndex.isUp && !fMiddle.isUp) {
+      if (dThumbIndex < 0.48 && dThumbMiddle < 0.52 && this.dist(lm[4], lm[16]) / palmScale < 0.58) {
+        return { letter: 'O', confidence: 0.96 };
+      }
+      if (
+        dThumbIndex >= 0.35 &&
+        dThumbIndex <= 1.15 &&
+        !isThumbAcrossPalm &&
+        lm[8].y < lm[5].y + palmScale * 0.1
+      ) {
+        return { letter: 'C', confidence: 0.95 };
+      }
     }
 
     // Default: Neutral / No matching sign

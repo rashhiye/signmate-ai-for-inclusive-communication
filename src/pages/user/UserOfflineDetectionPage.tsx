@@ -92,11 +92,11 @@ export const UserOfflineDetectionPage: React.FC = () => {
             return;
           }
 
-          // Append letter when accuracy is >= 80% (0.80) and held stable for 3 frames (~540ms)
-          if (result.confidence >= 0.80) {
+          // Append letter when accuracy is >= 70% (0.70) and held stable for 2 frames (~360ms)
+          if (result.confidence >= 0.70) {
             if (result.letter === candidateLetter) {
               stableCount++;
-              if (stableCount >= 3) {
+              if (stableCount >= 2) {
                 const letter = result.letter;
                 setRecognizedSignText((prev) => {
                   const next = prev + letter;
@@ -114,7 +114,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
               stableCount = 1;
             }
           } else {
-            // Under 80% accuracy - do not print
+            // Under 70% accuracy - do not print
             candidateLetter = '';
             stableCount = 0;
           }

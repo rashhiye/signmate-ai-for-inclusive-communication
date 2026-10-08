@@ -271,7 +271,7 @@ export const RoomPage: React.FC = () => {
         }
 
         // Stream active detected sign in real-time
-        if (result.hasHand && result.letter && result.confidence >= 0.75) {
+        if (result.hasHand && result.letter && result.confidence >= 0.70) {
           // Immediately stream active letter gesture badge to partner in real-time
           webRTCService.sendLiveCaption(result.letter, recognizedTextRef.current);
           if (isSelfLoopback) {
@@ -286,11 +286,11 @@ export const RoomPage: React.FC = () => {
             return;
           }
 
-          // Commit letter to sentence buffer when held stable for 3 frames (~540ms) with >= 80% confidence
-          if (result.confidence >= 0.80) {
+          // Commit letter to sentence buffer when held stable for 2 frames (~360ms) with >= 70% confidence
+          if (result.confidence >= 0.70) {
             if (result.letter === candidateLetter) {
               stableCount++;
-              if (stableCount >= 3) {
+              if (stableCount >= 2) {
                 const letter = result.letter;
                 appendCharacter(letter);
                 const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
