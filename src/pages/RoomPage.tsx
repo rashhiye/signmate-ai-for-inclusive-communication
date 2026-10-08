@@ -233,34 +233,39 @@ export const RoomPage: React.FC = () => {
           cooldown--;
         }
 
-        // ONLY print/append letter when accuracy is >= 85% (0.85) and gesture is stable
-        if (result.hasHand && result.letter && result.confidence >= 0.85) {
+        // Stream active detected sign in real-time
+        if (result.hasHand && result.letter && result.confidence >= 0.75) {
           // Immediately stream active letter gesture to partner so they see real-time signing
           webRTCService.sendLiveCaption(result.letter, recognizedTextRef.current);
           if (isSelfLoopback) {
             setPartnerLiveLetter(result.letter);
           }
 
-          if (result.letter === candidateLetter) {
-            stableCount++;
-            // Require 4 stable frames (~720ms) and active cooldown passed
-            if (stableCount >= 4 && cooldown <= 0) {
-              const letter = result.letter;
-              appendCharacter(letter);
-              const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
-              recognizedTextRef.current = updatedBuffer;
-              webRTCService.sendLiveCaption(letter, updatedBuffer);
-              if (isSelfLoopback) {
-                setPartnerLiveLetter(letter);
-                setPartnerLiveCaption(updatedBuffer);
+          // Commit letter to sentence buffer when held stable for 3 frames (~540ms) with >= 80% confidence
+          if (result.confidence >= 0.80) {
+            if (result.letter === candidateLetter) {
+              stableCount++;
+              if (stableCount >= 3 && cooldown <= 0) {
+                const letter = result.letter;
+                appendCharacter(letter);
+                const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
+                recognizedTextRef.current = updatedBuffer;
+                webRTCService.sendLiveCaption(letter, updatedBuffer);
+                if (isSelfLoopback) {
+                  setPartnerLiveLetter(letter);
+                  setPartnerLiveCaption(updatedBuffer);
+                }
+                stableCount = 0;
+                candidateLetter = '';
+                cooldown = 4; // cooldown to prevent duplicate spam
               }
-              stableCount = 0;
-              candidateLetter = '';
-              cooldown = 6; // cooldown to prevent duplicate spam
+            } else {
+              candidateLetter = result.letter;
+              stableCount = 1;
             }
           } else {
-            candidateLetter = result.letter;
-            stableCount = 1;
+            stableCount = 0;
+            candidateLetter = '';
           }
         } else {
           stableCount = 0;

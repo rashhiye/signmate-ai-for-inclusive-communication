@@ -54,7 +54,6 @@ export const UserOfflineDetectionPage: React.FC = () => {
     let isMounted = true;
     let candidateLetter = '';
     let stableCount = 0;
-    let lastCommittedLetter = '';
     let cooldown = 0;
 
     const intervalId = window.setInterval(async () => {
@@ -68,14 +67,15 @@ export const UserOfflineDetectionPage: React.FC = () => {
         if (result.hasHand && result.letter) {
           setCurrentGesture(result.letter);
 
-          // ONLY print/append letter when accuracy is >= 85% (0.85)
-          if (result.confidence >= 0.85) {
+          // Append letter when accuracy is >= 80% (0.80) and held stable
+          if (result.confidence >= 0.80) {
             if (result.letter === candidateLetter) {
               stableCount++;
-              // Commit when held stable for 3 cycles (~550ms)
-              if (stableCount >= 3 && result.letter !== lastCommittedLetter && cooldown <= 0) {
+              // Commit when held stable for 3 cycles (~540ms)
+              if (stableCount >= 3 && cooldown <= 0) {
                 setRecognizedSignText((prev) => prev + result.letter);
-                lastCommittedLetter = result.letter;
+                stableCount = 0;
+                candidateLetter = '';
                 cooldown = 4;
               }
             } else {
@@ -83,7 +83,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
               stableCount = 1;
             }
           } else {
-            // Under 85% accuracy - do not print
+            // Under 80% accuracy - do not print
             candidateLetter = '';
             stableCount = 0;
           }
@@ -91,7 +91,6 @@ export const UserOfflineDetectionPage: React.FC = () => {
           setCurrentGesture('');
           candidateLetter = '';
           stableCount = 0;
-          lastCommittedLetter = '';
         }
 
         if (cooldown > 0) {
