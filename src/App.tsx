@@ -86,6 +86,7 @@ const AppLayout: React.FC = () => {
           <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
 
           {/* Real-time Video Call Room (Screenshot Page 65) */}
+          <Route path="/room" element={<Navigate to={`/room/SM-${Math.random().toString(36).substring(2, 7).toUpperCase()}`} replace />} />
           <Route path="/room/:roomId" element={<RoomPage />} />
 
           {/* 404 Catch-All */}

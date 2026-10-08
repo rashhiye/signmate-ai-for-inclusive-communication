@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { webRTCService } from '../services/WebRTCService';
 import { handSignDetector, type HandDetectionResult } from '../ai/handSignDetector';
 import { HandLandmarkOverlay } from '../components/ai/HandLandmarkOverlay';
+import { normalizeRoomCode } from '../utils/roomCode';
 import {
   Mic,
   MicOff,
@@ -405,9 +406,11 @@ export const RoomPage: React.FC = () => {
           </button>
           <button
             onClick={() => {
-              const inputCode = prompt('Enter Room Code to Join (e.g., SM-952JW or X8LN7A):');
+              const inputCode = prompt('Enter Room Code to Join (e.g. SM-952JW or paste room link):');
               if (inputCode && inputCode.trim()) {
-                navigate(`/room/${inputCode.trim().toUpperCase()}`);
+                const normalized = normalizeRoomCode(inputCode);
+                navigate(`/room/${normalized}`);
+                showToast({ type: 'info', title: 'Connecting to Room', message: `Joining ${normalized}...` });
               }
             }}
             className="px-3 py-1 rounded bg-[#292b32] hover:bg-[#343740] border border-white/10 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"

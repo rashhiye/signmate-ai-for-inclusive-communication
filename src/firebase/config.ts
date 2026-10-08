@@ -15,32 +15,38 @@ export interface FirebaseClientConfig {
   databaseURL?: string;
 }
 
-export function getFirebaseConfig(): FirebaseClientConfig | null {
-  const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+const FALLBACK_FIREBASE_CONFIG: FirebaseClientConfig = {
+  apiKey: 'AIzaSyDRvd-Br6GjHDNzVy02FrwCS0VYX8YHv_c',
+  authDomain: 'signmate-a73b3.firebaseapp.com',
+  projectId: 'signmate-a73b3',
+  storageBucket: 'signmate-a73b3.firebasestorage.app',
+  messagingSenderId: '220476879234',
+  appId: '1:220476879234:web:c6751a68537f6b34b25f9b',
+  measurementId: 'G-887JR1G099',
+  databaseURL: 'https://signmate-a73b3-default-rtdb.firebaseio.com',
+};
 
-  if (!apiKey || !projectId) {
-    return null;
-  }
-
-  const databaseURL =
-    import.meta.env.VITE_FIREBASE_DATABASE_URL ||
-    `https://${projectId}-default-rtdb.firebaseio.com`;
+export function getFirebaseConfig(): FirebaseClientConfig {
+  const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || FALLBACK_FIREBASE_CONFIG.apiKey;
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || FALLBACK_FIREBASE_CONFIG.projectId;
 
   return {
     apiKey,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${projectId}.firebaseapp.com`,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || FALLBACK_FIREBASE_CONFIG.authDomain,
     projectId,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-    databaseURL,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || FALLBACK_FIREBASE_CONFIG.storageBucket,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || FALLBACK_FIREBASE_CONFIG.messagingSenderId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || FALLBACK_FIREBASE_CONFIG.appId,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || FALLBACK_FIREBASE_CONFIG.measurementId,
+    databaseURL:
+      import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+      FALLBACK_FIREBASE_CONFIG.databaseURL ||
+      `https://${projectId}-default-rtdb.firebaseio.com`,
   };
 }
 
 export function isFirebaseConfigured(): boolean {
-  return getFirebaseConfig() !== null;
+  return true;
 }
 
 // Singleton instances

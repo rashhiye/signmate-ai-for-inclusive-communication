@@ -427,7 +427,19 @@ export class WebRTCService {
       const candidatesRef = ref(db, `${roomPath}/candidates`);
       const messagesRef = ref(db, `${roomPath}/messages`);
 
-      // 1. Register local peer presence with onDisconnect auto-removal
+      // 1. Fetch current peers in this room
+      const peersSnapshot = await get(peersRef).catch(() => null);
+      const existingPeers = peersSnapshot && peersSnapshot.exists() ? peersSnapshot.val() : {};
+      const activePeerIds = Object.keys(existingPeers).filter((id) => id !== this.clientId);
+
+      // If room was empty, purge any stale offers/answers/candidates from abandoned sessions
+      if (activePeerIds.length === 0) {
+        await remove(offerRef).catch(() => {});
+        await remove(answerRef).catch(() => {});
+        await remove(candidatesRef).catch(() => {});
+      }
+
+      // 2. Register local peer presence with onDisconnect auto-removal
       await set(myPeerRef, {
         id: this.clientId,
         joinedAt: Date.now(),
@@ -441,19 +453,60 @@ export class WebRTCService {
 
       try {
         onDisconnect(myPeerRef).remove();
+        onDisconnect(ref(db, `${roomPath}/candidates/${this.clientId}`)).remove();
       } catch {
         // ignore
       }
 
       this.callbacks?.onSignalingStatus?.({ rtdbConnected: true });
 
-      // 2. Track peer count changes
+      // 3. Track peer count changes and auto-renegotiate if new peer arrives
       const unsubPeers = onValue(
         peersRef,
-        (snapshot) => {
+        async (snapshot) => {
           const peers = snapshot.val() || {};
-          const count = Object.keys(peers).length;
+          const peerList = Object.keys(peers);
+          const count = peerList.length;
           this.callbacks?.onPeerCountChange?.(count);
+
+          // If a new peer arrived and we are the earlier peer (host) and not yet connected:
+          if (
+            count > 1 &&
+            !this.hasAnswered &&
+            pc.iceConnectionState !== 'connected' &&
+            pc.connectionState !== 'connected'
+          ) {
+            // Find earliest peer
+            const sortedPeers = Object.values(peers as Record<string, { id: string; joinedAt?: number }>).sort(
+              (a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)
+            );
+            if (sortedPeers.length > 0 && sortedPeers[0].id === this.clientId) {
+              // We are the host / caller: ensure an active offer is published
+              const currentOffer = await get(offerRef).catch(() => null);
+              const offData = currentOffer && currentOffer.exists() ? currentOffer.val() : null;
+              if (!offData || offData.senderId !== this.clientId || Date.now() - (offData.timestamp || 0) > 30000) {
+                try {
+                  if (pc.signalingState === 'stable') {
+                    const freshOffer = await pc.createOffer();
+                    await pc.setLocalDescription(freshOffer);
+                    this.hasOffered = true;
+                    await set(offerRef, {
+                      sdpInit: { type: freshOffer.type, sdp: freshOffer.sdp },
+                      senderId: this.clientId,
+                      timestamp: Date.now(),
+                    });
+                    this.broadcastChannel?.postMessage({
+                      type: 'offer',
+                      senderId: this.clientId,
+                      offer: freshOffer,
+                    });
+                  }
+                } catch (renegErr) {
+                  console.warn('[WebRTC RTDB] Renegotiation offer caught:', renegErr);
+                }
+              }
+            }
+          }
         },
         (err) => {
           console.warn('[WebRTC RTDB] peersRef listener error:', err);
@@ -465,7 +518,7 @@ export class WebRTCService {
       );
       this.unsubscribers.push(unsubPeers);
 
-      // 3. Listen to synchronized chat/sign/voice messages
+      // 4. Listen to synchronized chat/sign/voice messages
       const unsubMessages = onChildAdded(
         messagesRef,
         (snapshot) => {
@@ -480,18 +533,18 @@ export class WebRTCService {
       );
       this.unsubscribers.push(unsubMessages);
 
-      // 4. Check existing offer in Realtime Database
+      // 5. Check existing offer in Realtime Database
       const offerSnapshot = await get(offerRef).catch(() => null);
       const offerData = offerSnapshot && offerSnapshot.exists() ? offerSnapshot.val() : null;
 
-      const isRecentOffer =
+      const isOfferFromActivePeer =
         offerData &&
-        offerData.senderId !== this.clientId &&
-        offerData.timestamp &&
-        Date.now() - offerData.timestamp < 180000;
+        activePeerIds.includes(offerData.senderId) &&
+        offerData.sdpInit &&
+        Date.now() - (offerData.timestamp || 0) < 180000;
 
-      if (isRecentOffer && offerData.sdpInit && pc.signalingState === 'stable') {
-        // === CALLEE ROLE: Join existing offer ===
+      if (isOfferFromActivePeer && pc.signalingState === 'stable') {
+        // === CALLEE ROLE: Answer the active host's offer ===
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdpInit));
           await this.flushQueuedCandidates(pc);
@@ -505,6 +558,12 @@ export class WebRTCService {
             senderId: this.clientId,
             timestamp: Date.now(),
           });
+
+          try {
+            onDisconnect(answerRef).remove();
+          } catch {
+            // ignore
+          }
 
           // Broadcast answer locally
           this.broadcastChannel?.postMessage({
@@ -529,6 +588,12 @@ export class WebRTCService {
           console.warn('[WebRTC RTDB] Offer set error:', err);
         });
 
+        try {
+          onDisconnect(offerRef).remove();
+        } catch {
+          // ignore
+        }
+
         // Broadcast offer locally
         this.broadcastChannel?.postMessage({
           type: 'offer',
@@ -536,7 +601,7 @@ export class WebRTCService {
           offer,
         });
 
-        // Mirror offer to FastAPI
+        // Mirror offer to FastAPI if available
         this.postFastApiSignal('offer', { type: offer.type, sdp: offer.sdp });
 
         // Listen for callee answer in RTDB
@@ -562,7 +627,7 @@ export class WebRTCService {
         this.unsubscribers.push(unsubAnswer);
       }
 
-      // 5. Watch for incoming offers (if both peers joined simultaneously or offer updated)
+      // 6. Watch for incoming offers (if second peer arrives and publishes offer)
       const unsubOffer = onValue(
         offerRef,
         async (snapshot) => {
@@ -599,7 +664,22 @@ export class WebRTCService {
       );
       this.unsubscribers.push(unsubOffer);
 
-      // 6. Watch for incoming ICE candidates across peers in RTDB
+      // 7. Catch-up with any existing candidates already published in RTDB
+      const initialCandsSnapshot = await get(candidatesRef).catch(() => null);
+      if (initialCandsSnapshot && initialCandsSnapshot.exists()) {
+        const candsMap = initialCandsSnapshot.val();
+        for (const [peerId, list] of Object.entries(candsMap)) {
+          if (peerId !== this.clientId && list && typeof list === 'object') {
+            for (const candItem of Object.values(list as Record<string, RTCIceCandidateInit>)) {
+              if (candItem) {
+                this.addOrQueueCandidate(pc, candItem);
+              }
+            }
+          }
+        }
+      }
+
+      // 8. Stream incoming ICE candidates in real-time across peers in RTDB
       const unsubCandidatesGroup = onChildAdded(
         candidatesRef,
         (peerCandSnapshot) => {

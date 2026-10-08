@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { isValidRoomCode, formatRoomCodeInput } from '../utils/roomCode';
+import { isValidRoomCode, formatRoomCodeInput, normalizeRoomCode } from '../utils/roomCode';
 import { useToast } from '../hooks/useToast';
 import { ArrowRight, Hash } from 'lucide-react';
 
@@ -32,10 +32,10 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanCode = code.trim().toUpperCase();
+    const cleanCode = normalizeRoomCode(code);
 
-    if (!isValidRoomCode(cleanCode)) {
-      setError('Please enter a valid SignMate code (format: SM-XXXXXX, e.g. SM-952JW)');
+    if (!cleanCode || !isValidRoomCode(cleanCode)) {
+      setError('Please enter a valid SignMate room code (e.g. SM-952JW or paste full link)');
       return;
     }
 
