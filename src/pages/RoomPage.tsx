@@ -507,14 +507,14 @@ export const RoomPage: React.FC = () => {
 
               {(!isCameraEnabled || !localStream) && (
                 <div className="flex flex-col items-center justify-center p-6 text-center select-none text-surface-400 z-10 max-w-sm">
-                  {deviceError === 'INSECURE_NETWORK_ORIGIN' ? (
+                  {deviceError === 'INSECURE_NETWORK_ORIGIN' || (deviceError && deviceError.includes('HTTPS')) || (typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') ? (
                     <div className="p-4 rounded-2xl bg-[#16181e]/95 border border-amber-500/30 text-center shadow-2xl backdrop-blur-md">
                       <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-3 text-amber-400">
                         <VideoOff className="w-6 h-6" />
                       </div>
-                      <h4 className="text-sm font-bold text-white mb-1">Webcam Blocked on Network IP</h4>
+                      <h4 className="text-sm font-bold text-white mb-1">Webcam on Network IP ({window.location.hostname})</h4>
                       <p className="text-xs text-surface-300 leading-relaxed mb-4">
-                        Web browsers block webcam access on raw IP addresses (<code className="text-amber-300 font-mono text-[11px]">{window.location.hostname}</code>) over plain HTTP.
+                        Chromium browsers restrict webcams on unencrypted HTTP network IPs. Use one of the options below to activate the camera:
                       </p>
                       <div className="flex flex-col gap-2">
                         <button
@@ -527,7 +527,23 @@ export const RoomPage: React.FC = () => {
                           className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <VideoIcon className="w-4 h-4" />
-                          <span>Switch to HTTPS (Recommended)</span>
+                          <span>1-Click Fix: Switch to HTTPS</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const s = await startLocalMedia();
+                            if (s) {
+                              showToast({
+                                type: 'success',
+                                title: 'Camera Enabled',
+                                message: 'Webcam started successfully.',
+                              });
+                            }
+                          }}
+                          className="w-full py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
+                        >
+                          <span>Request Camera on HTTP</span>
                         </button>
                         <button
                           type="button"
@@ -541,9 +557,12 @@ export const RoomPage: React.FC = () => {
                           <span>Open on localhost (This PC)</span>
                         </button>
                       </div>
-                      <p className="text-[10px] text-surface-500 mt-2.5 leading-normal">
-                        Note: When switching to HTTPS with local dev SSL, click <em>Advanced → Proceed</em> if your browser prompts.
-                      </p>
+                      <div className="mt-3 p-2 rounded-xl bg-black/40 border border-white/5 text-[10px] text-surface-400 text-left">
+                        <span className="font-bold text-surface-300 block mb-0.5">To allow plain HTTP in Chrome:</span>
+                        1. Open <code className="text-amber-300 font-mono select-all">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code><br />
+                        2. Add <code className="text-emerald-300 font-mono select-all">{`http://${window.location.host}`}</code><br />
+                        3. Set to <strong>Enabled</strong> & Relaunch.
+                      </div>
                     </div>
                   ) : (
                     <>

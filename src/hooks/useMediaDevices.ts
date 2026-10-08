@@ -16,6 +16,27 @@ export interface UseMediaDevicesResult {
   toggleMicrophone: () => Promise<boolean>;
 }
 
+async function requestMediaStream(constraints: MediaStreamConstraints): Promise<MediaStream> {
+  if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  // Fallback to legacy vendor implementations
+  const legacyGetUserMedia =
+    (navigator as any).getUserMedia ||
+    (navigator as any).webkitGetUserMedia ||
+    (navigator as any).mozGetUserMedia ||
+    (navigator as any).msGetUserMedia;
+
+  if (legacyGetUserMedia) {
+    return new Promise((resolve, reject) => {
+      legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+    });
+  }
+
+  throw new Error('NOT_SUPPORTED');
+}
+
 export function useMediaDevices(): UseMediaDevicesResult {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [cameraAvailable, setCameraAvailable] = useState<boolean>(true);
@@ -30,31 +51,33 @@ export function useMediaDevices(): UseMediaDevicesResult {
 
   // Check hardware availability and permissions on mount
   useEffect(() => {
-    if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      setDeviceError('INSECURE_NETWORK_ORIGIN');
-      setCameraAvailable(false);
-      setMicAvailable(false);
+    const hasMedia = !!(
+      navigator.mediaDevices?.enumerateDevices ||
+      navigator.mediaDevices?.getUserMedia ||
+      (navigator as any).webkitGetUserMedia ||
+      (navigator as any).getUserMedia
+    );
+
+    // If browser completely strips media APIs on HTTP network IP, seamlessly upgrade to HTTPS
+    if (!hasMedia && window.isSecureContext === false && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      console.warn('[SignMate] Browser hides camera API on unencrypted HTTP IP. Upgrading to HTTPS...');
+      window.location.href = window.location.href.replace('http:', 'https:');
       return;
     }
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-      setDeviceError('Media devices API not supported in this browser environment.');
-      setCameraAvailable(false);
-      setMicAvailable(false);
-      return;
+    if (navigator.mediaDevices?.enumerateDevices) {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          const hasCam = devices.some((d) => d.kind === 'videoinput');
+          const hasMic = devices.some((d) => d.kind === 'audioinput');
+          setCameraAvailable(hasCam);
+          setMicAvailable(hasMic);
+        })
+        .catch((err) => {
+          console.warn('[SignMate] Could not enumerate media devices:', err);
+        });
     }
-
-    navigator.mediaDevices
-      .enumerateDevices()
-      .then((devices) => {
-        const hasCam = devices.some((d) => d.kind === 'videoinput');
-        const hasMic = devices.some((d) => d.kind === 'audioinput');
-        setCameraAvailable(hasCam);
-        setMicAvailable(hasMic);
-      })
-      .catch((err) => {
-        console.warn('[SignMate] Could not enumerate media devices:', err);
-      });
 
     // Check permissions API if supported
     if (navigator.permissions && navigator.permissions.query) {
@@ -85,20 +108,12 @@ export function useMediaDevices(): UseMediaDevicesResult {
   const startLocalMedia = useCallback(async (): Promise<MediaStream | null> => {
     setDeviceError(null);
     try {
-      if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        throw new Error('INSECURE_NETWORK_ORIGIN');
-      }
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Camera and microphone access is not supported in this browser.');
-      }
-
       let stream: MediaStream | null = null;
       let acquiredAudio = false;
 
       // Tier 1: Try ideal video + audio
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await requestMediaStream({
           video: {
             width: { ideal: 640 },
             height: { ideal: 480 },
@@ -112,7 +127,7 @@ export function useMediaDevices(): UseMediaDevicesResult {
 
         // Tier 2: Try ideal video without audio (handles missing mic or denied mic)
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
+          stream = await requestMediaStream({
             video: {
               width: { ideal: 640 },
               height: { ideal: 480 },
@@ -125,11 +140,17 @@ export function useMediaDevices(): UseMediaDevicesResult {
 
           // Tier 3: Unconstrained basic video
           try {
-            stream = await navigator.mediaDevices.getUserMedia({
+            stream = await requestMediaStream({
               video: true,
               audio: false,
             });
           } catch (tier3Err) {
+            // If completely blocked by browser on plain HTTP, upgrade to HTTPS
+            if (window.isSecureContext === false && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+              console.warn('[SignMate] Camera blocked on HTTP IP. Upgrading to HTTPS...');
+              window.location.href = window.location.href.replace('http:', 'https:');
+              return null;
+            }
             throw tier3Err;
           }
         }
@@ -142,7 +163,7 @@ export function useMediaDevices(): UseMediaDevicesResult {
       // If we got video but not audio in initial attempt, try to softly attach audio
       if (!acquiredAudio) {
         try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const audioStream = await requestMediaStream({ audio: true });
           const audioTrack = audioStream.getAudioTracks()[0];
           if (audioTrack) {
             stream.addTrack(audioTrack);
@@ -173,6 +194,8 @@ export function useMediaDevices(): UseMediaDevicesResult {
         errorMsg = 'No camera found. Please plug in or enable a webcam.';
       } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
         errorMsg = 'Camera is occupied by another application (e.g. Zoom or another browser tab).';
+      } else if (error.message === 'NOT_SUPPORTED') {
+        errorMsg = 'Camera access requires HTTPS or localhost on this browser.';
       } else if (error.message) {
         errorMsg = error.message;
       }
@@ -217,7 +240,7 @@ export function useMediaDevices(): UseMediaDevicesResult {
   const toggleMicrophone = useCallback(async (): Promise<boolean> => {
     if (!streamRef.current || streamRef.current.getAudioTracks().length === 0) {
       try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioStream = await requestMediaStream({ audio: true });
         const track = audioStream.getAudioTracks()[0];
         if (track && streamRef.current) {
           streamRef.current.addTrack(track);

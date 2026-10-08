@@ -307,7 +307,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
               )}
 
               {/* Real Hand Landmark & Skeletal Overlay */}
-              {isCameraEnabled && (
+              {isCameraEnabled && localStream && (
                 <HandLandmarkOverlay
                   hasHand={!!detectionResult?.hasHand}
                   landmarks={detectionResult?.landmarks}
