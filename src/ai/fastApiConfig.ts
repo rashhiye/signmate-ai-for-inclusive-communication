@@ -52,8 +52,17 @@ export interface FastApiAiConfig {
 }
 
 export function getFastApiConfig(): FastApiAiConfig {
+  const custom = import.meta.env.VITE_AI_API_BASE_URL;
+  if (custom) {
+    return {
+      baseUrl: custom,
+      inferenceEndpoint: '/api/v1/predict',
+      timeoutMs: 5000,
+    };
+  }
+  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
   return {
-    baseUrl: import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:8000',
+    baseUrl: `http://${host}:8000`,
     inferenceEndpoint: '/api/v1/predict',
     timeoutMs: 5000,
   };

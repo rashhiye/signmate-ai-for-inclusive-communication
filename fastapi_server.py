@@ -74,6 +74,21 @@ def load_model_and_labels():
     if os.path.exists(MODEL_PATH):
         try:
             import keras
+            from keras.layers import RandomContrast, Dense
+
+            # Keras 3 deserialization compatibility patches for legacy model configs
+            orig_rc_init = RandomContrast.__init__
+            def patched_rc_init(self, *args, **kwargs):
+                kwargs.pop('value_range', None)
+                return orig_rc_init(self, *args, **kwargs)
+            RandomContrast.__init__ = patched_rc_init
+
+            orig_dense_init = Dense.__init__
+            def patched_dense_init(self, *args, **kwargs):
+                kwargs.pop('quantization_config', None)
+                return orig_dense_init(self, *args, **kwargs)
+            Dense.__init__ = patched_dense_init
+
             print(f"[SignMate] Loading model from {MODEL_PATH} via Keras...")
             model = keras.models.load_model(MODEL_PATH)
             print("[SignMate] Model loaded successfully!")

@@ -44,10 +44,9 @@ export class HandSignDetector {
   private getFastApiBaseUrl(): string {
     const custom = import.meta.env.VITE_AI_API_BASE_URL;
     if (custom) return custom;
-    const isLocalhost =
-      typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    return isLocalhost ? 'http://localhost:8000' : '';
+    if (typeof window === 'undefined') return '';
+    const host = window.location.hostname || 'localhost';
+    return `http://${host}:8000`;
   }
 
   /**
@@ -89,40 +88,32 @@ export class HandSignDetector {
 
   /**
    * Probes if the optional FastAPI model server is online.
-   * If offline or on a remote LAN without FastAPI, gracefully stops continuous probing.
+   * If online, enables deep learning inference. If offline, MediaPipe landmark engine handles detection locally.
    */
   public async checkFastApiHealth(): Promise<boolean> {
     const baseUrl = this.getFastApiBaseUrl();
     if (!baseUrl) {
       this.isFastApiAvailable = false;
-      if (this.checkServerTimer) {
-        window.clearInterval(this.checkServerTimer);
-        this.checkServerTimer = null;
-      }
       return false;
     }
 
     try {
       const res = await fetch(`${baseUrl}/`, {
         method: 'GET',
-        signal: AbortSignal.timeout(500),
+        signal: AbortSignal.timeout(1000),
       });
       if (res.ok) {
+        if (!this.isFastApiAvailable) {
+          console.log(`[SignMate] Connected to FastAPI AI server on ${baseUrl}`);
+        }
         this.isFastApiAvailable = true;
         return true;
       }
     } catch {
-      // Server offline - client-side MediaPipe landmark engine will handle detection
+      // Server offline or starting up; client-side MediaPipe landmark engine will handle detection
     }
 
     this.isFastApiAvailable = false;
-
-    // Stop recurring timer if server is offline to eliminate console ERR_CONNECTION_TIMED_OUT errors
-    if (this.checkServerTimer) {
-      window.clearInterval(this.checkServerTimer);
-      this.checkServerTimer = null;
-    }
-
     return false;
   }
 
