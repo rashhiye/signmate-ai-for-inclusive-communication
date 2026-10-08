@@ -81,7 +81,30 @@ export const RoomPage: React.FC = () => {
   const [partnerLiveCaption, setPartnerLiveCaption] = useState<string>('');
   const [partnerLiveLetter, setPartnerLiveLetter] = useState<string>('');
   const [isSelfLoopback, setIsSelfLoopback] = useState<boolean>(false);
+  const [isAutoSpeakEnabled, setIsAutoSpeakEnabled] = useState<boolean>(true);
+  const isAutoSpeakRef = useRef<boolean>(true);
   const recognizedTextRef = useRef<string>('');
+
+  // Keep isAutoSpeakRef synchronized with toggle state
+  useEffect(() => {
+    isAutoSpeakRef.current = isAutoSpeakEnabled;
+  }, [isAutoSpeakEnabled]);
+
+  // Voice synthesis speaker helper
+  const speakText = (raw: string) => {
+    if (!window.speechSynthesis || !raw) return;
+    try {
+      window.speechSynthesis.cancel();
+      const clean = raw.replace(/^\[.*?\]:\s*/, '').trim();
+      if (!clean) return;
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // ignore
+    }
+  };
 
   // Keep recognizedTextRef synchronized with recognition state
   useEffect(() => {
@@ -174,6 +197,10 @@ export const RoomPage: React.FC = () => {
           },
         ]);
         setPartnerLiveCaption(roomMsg.text);
+        // Automatically speak signed messages for hearing callers if enabled
+        if (isAutoSpeakRef.current && (roomMsg.type === 'sign' || roomMsg.text.startsWith('[Signed]:'))) {
+          speakText(roomMsg.text);
+        }
       },
       onLiveCaption: (caption) => {
         if (caption.letter !== undefined) {
@@ -408,7 +435,10 @@ export const RoomPage: React.FC = () => {
 
   const handleSelectSuggestion = (word: string) => {
     selectSuggestion(word);
-    const updated = `${word} `;
+    const trimmed = (recognizedTextRef.current || '').trimEnd();
+    const lastSpaceIndex = trimmed.lastIndexOf(' ');
+    const prefix = lastSpaceIndex >= 0 ? trimmed.substring(0, lastSpaceIndex + 1) : '';
+    const updated = `${prefix}${word.toUpperCase()} `;
     recognizedTextRef.current = updated;
     webRTCService.sendLiveCaption(word, updated);
     if (isSelfLoopback) {
@@ -824,7 +854,7 @@ export const RoomPage: React.FC = () => {
 
                   {/* Live Caption Overlay for deaf users reading partner's spoken words or signs */}
                   <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#121418]/90 backdrop-blur-md border border-white/20 p-3.5 rounded-2xl shadow-2xl transition-all">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                         <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
@@ -832,11 +862,36 @@ export const RoomPage: React.FC = () => {
                           Live Partner Subtitles (Sign & Voice)
                         </span>
                       </div>
-                      {partnerLiveLetter && (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-mono font-bold">
-                          Active: [{partnerLiveLetter}]
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {partnerLiveLetter && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-mono font-bold">
+                            Active: [{partnerLiveLetter}]
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !isAutoSpeakEnabled;
+                            setIsAutoSpeakEnabled(next);
+                            showToast({
+                              type: 'info',
+                              title: next ? 'Auto-Voice Enabled' : 'Auto-Voice Muted',
+                              message: next
+                                ? 'Incoming signed words will be spoken aloud automatically.'
+                                : 'Audio speech disabled for incoming signs.',
+                            });
+                          }}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
+                            isAutoSpeakEnabled
+                              ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300'
+                              : 'bg-[#252830] border-white/10 text-surface-400 hover:text-white'
+                          }`}
+                          title="Toggle Automatic Speech Synthesis for signed words"
+                        >
+                          <Volume2 className="w-3 h-3" />
+                          <span>Auto-Voice: {isAutoSpeakEnabled ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm sm:text-base font-semibold text-white tracking-wide leading-snug break-words flex-1">
@@ -1197,7 +1252,7 @@ export const RoomPage: React.FC = () => {
                   Quick Sign Gestures:
                 </span>
                 <div className="flex flex-wrap gap-1">
-                  {['HELLO', 'THANK YOU', 'YES', 'NO', 'HELP'].map((word) => (
+                  {['HELLO', 'THANK YOU', 'YES', 'NO', 'PLEASE', 'HELP', 'SORRY', 'GOOD', 'BYE'].map((word) => (
                     <button
                       key={word}
                       type="button"
@@ -1292,10 +1347,22 @@ export const RoomPage: React.FC = () => {
                       window.speechSynthesis.speak(u);
                     }
                   }}
-                  className="w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border bg-[#22242b] border-white/5 text-surface-200 hover:text-white hover:bg-[#2c2f38] transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border bg-[#22242b] border-white/5 text-surface-200 hover:text-white hover:bg-[#2c2f38] transition-colors cursor-pointer mb-2"
                 >
                   <span>Test Voice Output</span>
                   <Volume2 className="w-4 h-4 text-blue-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAutoSpeakEnabled(!isAutoSpeakEnabled)}
+                  className={`w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border transition-colors cursor-pointer ${
+                    isAutoSpeakEnabled
+                      ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                      : 'bg-[#22242b] border-white/5 text-surface-400'
+                  }`}
+                >
+                  <span>Auto-Speak Partner Signs</span>
+                  {isAutoSpeakEnabled ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
                 </button>
               </div>
             </div>

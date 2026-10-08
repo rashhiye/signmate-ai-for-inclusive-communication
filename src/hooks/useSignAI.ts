@@ -79,13 +79,48 @@ export function useSignAI(): UseSignAIResult {
         NO: ['NO', 'NOTHING', 'NOW'],
         Y: ['YES', 'YOU', 'YOUR', 'WELCOME'],
         YE: ['YES', 'YESTERDAY'],
+        P: ['PLEASE', 'PEOPLE', 'PERFECT'],
+        PL: ['PLEASE', 'PLAY'],
+        PLE: ['PLEASE'],
+        G: ['GOOD', 'GREAT', 'GLAD', 'GO'],
+        GO: ['GOOD', 'GOODBYE', 'GOING'],
+        M: ['ME', 'MY', 'MORNING', 'MEET'],
+        ME: ['MEET', 'ME', 'MESSAGE'],
+        W: ['WHAT', 'WHERE', 'WHEN', 'WHY', 'WELCOME'],
+        WH: ['WHAT', 'WHERE', 'WHEN', 'WHY'],
+        S: ['SIGN', 'SORRY', 'SEE', 'SURE'],
+        SO: ['SORRY', 'SOON'],
+        F: ['FINE', 'FRIEND', 'FOR', 'FEEL'],
+        FR: ['FRIEND', 'FROM'],
+        C: ['CAN', 'CALL', 'COME', 'CARE'],
+        CA: ['CAN', 'CALL'],
+        B: ['BYE', 'BEAUTIFUL', 'BAD', 'BEST'],
+        BY: ['BYE', 'BYE BYE'],
+        L: ['LOVE', 'LIKE', 'LEARN', 'LOOK'],
+        LO: ['LOVE', 'LOOK'],
+        D: ['DEAF', 'DAY', 'DO'],
+        DE: ['DEAF'],
+        DEA: ['DEAF'],
+        A: ['ALL', 'AND', 'ARE', 'ABOUT'],
+        AL: ['ALL', 'ALRIGHT', 'ALWAYS'],
+        OK: ['OKAY'],
+        O: ['OKAY', 'ONE', 'OPEN'],
+        I: ['I AM', 'IMPORTANT', 'IS'],
+        U: ['UNDERSTAND', 'USE', 'UP'],
+        UN: ['UNDERSTAND'],
+        UND: ['UNDERSTAND'],
+        R: ['READY', 'RIGHT', 'REALLY'],
+        RE: ['READY', 'REALLY'],
       };
 
-      const suggestions = sampleDictionary[nextText] || [
-        `${nextText}O`,
-        `${nextText}E`,
-        `${nextText}ING`,
-      ];
+      const words = nextText.split(/\s+/);
+      const lastWord = (words[words.length - 1] || '').toUpperCase();
+
+      const suggestions = sampleDictionary[lastWord] || (lastWord.length >= 2 ? [
+        `${lastWord}O`,
+        `${lastWord}E`,
+        `${lastWord}ING`,
+      ] : []);
 
       return {
         ...r,
@@ -98,13 +133,20 @@ export function useSignAI(): UseSignAIResult {
   }, []);
 
   const selectSuggestion = useCallback((word: string) => {
-    setRecognition((r) => ({
-      ...r,
-      recognizedText: word,
-      currentPrediction: null,
-      confidence: 0.99,
-      suggestions: [],
-    }));
+    setRecognition((r) => {
+      const trimmed = r.recognizedText.trimEnd();
+      const lastSpaceIndex = trimmed.lastIndexOf(' ');
+      const prefix = lastSpaceIndex >= 0 ? trimmed.substring(0, lastSpaceIndex + 1) : '';
+      const updated = `${prefix}${word.toUpperCase()} `;
+
+      return {
+        ...r,
+        recognizedText: updated,
+        currentPrediction: null,
+        confidence: 0.99,
+        suggestions: [],
+      };
+    });
     announceToScreenReader(`Selected suggestion: ${word}`);
   }, []);
 
