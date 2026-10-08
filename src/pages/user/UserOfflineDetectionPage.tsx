@@ -18,7 +18,7 @@ import { handSignDetector, type HandDetectionResult } from '../../ai/handSignDet
 import { HandLandmarkOverlay } from '../../components/ai/HandLandmarkOverlay';
 
 export const UserOfflineDetectionPage: React.FC = () => {
-  const { localStream, startLocalMedia, stopLocalMedia, isCameraEnabled } = useMediaDevices();
+  const { localStream, startLocalMedia, stopLocalMedia, isCameraEnabled, deviceError } = useMediaDevices();
   const { showToast } = useToast();
 
   const [recognizedSignText, setRecognizedSignText] = useState('');
@@ -31,10 +31,15 @@ export const UserOfflineDetectionPage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const speechRecognitionRef = useRef<any>(null);
 
-  // Attach local stream to videoRef
+  // Attach local stream to videoRef and ensure playback
   useEffect(() => {
     if (videoRef.current && localStream) {
-      videoRef.current.srcObject = localStream;
+      if (videoRef.current.srcObject !== localStream) {
+        videoRef.current.srcObject = localStream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('[SignMate] videoRef play caught:', err);
+      });
     }
   }, [localStream, isCameraEnabled]);
 
@@ -263,18 +268,41 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
             {/* Video Viewport with landmark guide */}
             <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
-              {localStream && isCameraEnabled ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover scale-x-[-1]"
-                />
-              ) : (
-                <div className="text-center p-4">
+              <video
+                ref={(el) => {
+                  videoRef.current = el;
+                  if (el && localStream && el.srcObject !== localStream) {
+                    el.srcObject = localStream;
+                    el.play().catch(() => {});
+                  }
+                }}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover scale-x-[-1] ${
+                  localStream && isCameraEnabled ? 'block' : 'hidden'
+                }`}
+              />
+              {(!localStream || !isCameraEnabled) && (
+                <div className="text-center p-4 z-10">
                   <Camera className="w-10 h-10 text-surface-600 mx-auto mb-2" />
-                  <p className="text-xs text-surface-400">Camera feed inactive</p>
+                  <p className="text-xs text-white font-medium">{deviceError || 'Camera feed inactive'}</p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const s = await startLocalMedia();
+                      if (s) {
+                        showToast({
+                          type: 'success',
+                          title: 'Camera Enabled',
+                          message: 'Webcam ready for offline sign detection.',
+                        });
+                      }
+                    }}
+                    className="mt-2.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                  >
+                    Enable Camera
+                  </button>
                 </div>
               )}
 

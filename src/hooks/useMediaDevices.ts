@@ -12,8 +12,8 @@ export interface UseMediaDevicesResult {
   deviceError: string | null;
   startLocalMedia: () => Promise<MediaStream | null>;
   stopLocalMedia: () => void;
-  toggleCamera: () => boolean;
-  toggleMicrophone: () => boolean;
+  toggleCamera: () => Promise<boolean>;
+  toggleMicrophone: () => Promise<boolean>;
 }
 
 export function useMediaDevices(): UseMediaDevicesResult {
@@ -31,9 +31,13 @@ export function useMediaDevices(): UseMediaDevicesResult {
   // Check hardware availability and permissions on mount
   useEffect(() => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        setDeviceError('Camera access requires HTTPS or localhost origin.');
+      } else {
+        setDeviceError('Media devices API not supported in this browser environment.');
+      }
       setCameraAvailable(false);
       setMicAvailable(false);
-      setDeviceError('Media devices API not supported in this browser environment.');
       return;
     }
 
@@ -46,7 +50,7 @@ export function useMediaDevices(): UseMediaDevicesResult {
         setMicAvailable(hasMic);
       })
       .catch((err) => {
-        console.warn('Could not enumerate media devices:', err);
+        console.warn('[SignMate] Could not enumerate media devices:', err);
       });
 
     // Check permissions API if supported
@@ -79,39 +83,97 @@ export function useMediaDevices(): UseMediaDevicesResult {
     setDeviceError(null);
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
+        if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          throw new Error('Camera access requires a secure context (HTTPS or localhost). Please open SignMate via localhost or enable HTTPS.');
+        }
         throw new Error('Camera and microphone access is not supported in this browser.');
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
-        },
-        audio: true,
-      });
+      let stream: MediaStream | null = null;
+      let acquiredAudio = false;
+
+      // Tier 1: Try ideal video + audio
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+          },
+          audio: true,
+        });
+        acquiredAudio = true;
+      } catch (tier1Err) {
+        console.warn('[SignMate] Initial video+audio getUserMedia failed, retrying video only:', tier1Err);
+
+        // Tier 2: Try ideal video without audio (handles missing mic or denied mic)
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user',
+            },
+            audio: false,
+          });
+        } catch (tier2Err) {
+          console.warn('[SignMate] Constrained video failed, retrying unconstrained video:', tier2Err);
+
+          // Tier 3: Unconstrained basic video
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          } catch (tier3Err) {
+            throw tier3Err;
+          }
+        }
+      }
+
+      if (!stream) {
+        throw new Error('Failed to start camera stream.');
+      }
+
+      // If we got video but not audio in initial attempt, try to softly attach audio
+      if (!acquiredAudio) {
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (audioTrack) {
+            stream.addTrack(audioTrack);
+            setIsMicEnabled(true);
+          }
+        } catch {
+          console.info('[SignMate] Running in video-only mode (microphone unavailable).');
+          setIsMicEnabled(false);
+        }
+      } else {
+        setIsMicEnabled(true);
+      }
 
       streamRef.current = stream;
       setLocalStream(stream);
       setCameraPermission('granted');
-      setMicPermission('granted');
       setIsCameraEnabled(true);
-      setIsMicEnabled(true);
+      setDeviceError(null);
       return stream;
     } catch (err: unknown) {
       const error = err as Error;
       let errorMsg = 'Failed to access camera/microphone.';
 
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMsg = 'Camera and microphone permissions were denied. Please grant access in your browser settings.';
+        errorMsg = 'Camera permission was denied. Please allow camera permissions in your browser URL bar.';
         setCameraPermission('denied');
-        setMicPermission('denied');
       } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        errorMsg = 'No camera or microphone found on this device.';
+        errorMsg = 'No camera found. Please plug in or enable a webcam.';
       } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        errorMsg = 'Hardware device is currently occupied by another application.';
+        errorMsg = 'Camera is occupied by another application (e.g. Zoom or another browser tab).';
+      } else if (error.message) {
+        errorMsg = error.message;
       }
 
+      console.error('[SignMate] Camera access error:', error);
       setDeviceError(errorMsg);
       return null;
     }
@@ -125,10 +187,20 @@ export function useMediaDevices(): UseMediaDevicesResult {
     setLocalStream(null);
   }, []);
 
-  const toggleCamera = useCallback((): boolean => {
-    if (!streamRef.current) return false;
+  const toggleCamera = useCallback(async (): Promise<boolean> => {
+    // If no stream exists or tracks are missing/ended, start the camera
+    if (!streamRef.current || streamRef.current.getVideoTracks().length === 0) {
+      const s = await startLocalMedia();
+      return !!s;
+    }
+
     const videoTracks = streamRef.current.getVideoTracks();
-    if (videoTracks.length === 0) return false;
+    const hasLiveTrack = videoTracks.some((t) => t.readyState === 'live');
+
+    if (!hasLiveTrack) {
+      const s = await startLocalMedia();
+      return !!s;
+    }
 
     const nextState = !isCameraEnabled;
     videoTracks.forEach((track) => {
@@ -136,13 +208,25 @@ export function useMediaDevices(): UseMediaDevicesResult {
     });
     setIsCameraEnabled(nextState);
     return nextState;
-  }, [isCameraEnabled]);
+  }, [isCameraEnabled, startLocalMedia]);
 
-  const toggleMicrophone = useCallback((): boolean => {
-    if (!streamRef.current) return false;
-    const audioTracks = streamRef.current.getAudioTracks();
-    if (audioTracks.length === 0) return false;
+  const toggleMicrophone = useCallback(async (): Promise<boolean> => {
+    if (!streamRef.current || streamRef.current.getAudioTracks().length === 0) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const track = audioStream.getAudioTracks()[0];
+        if (track && streamRef.current) {
+          streamRef.current.addTrack(track);
+          setIsMicEnabled(true);
+          return true;
+        }
+      } catch (err) {
+        console.warn('[SignMate] Cannot enable microphone:', err);
+        return false;
+      }
+    }
 
+    const audioTracks = streamRef.current?.getAudioTracks() || [];
     const nextState = !isMicEnabled;
     audioTracks.forEach((track) => {
       track.enabled = nextState;

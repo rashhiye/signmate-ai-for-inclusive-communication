@@ -48,6 +48,7 @@ export const RoomPage: React.FC = () => {
     localStream,
     isCameraEnabled,
     isMicEnabled,
+    deviceError,
     startLocalMedia,
     stopLocalMedia,
     toggleCamera,
@@ -82,7 +83,6 @@ export const RoomPage: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isListeningSpeech, setIsListeningSpeech] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<'ASL' | 'ISL'>('ASL');
 
   // Video element references
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -119,10 +119,15 @@ export const RoomPage: React.FC = () => {
     };
   }, [startLocalMedia, stopLocalMedia]);
 
-  // Attach local stream
+  // Attach local stream and trigger playback
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+      if (localVideoRef.current.srcObject !== localStream) {
+        localVideoRef.current.srcObject = localStream;
+      }
+      localVideoRef.current.play().catch((err) => {
+        console.warn('[SignMate] localVideoRef playback caught:', err);
+      });
     }
   }, [localStream, isCameraEnabled]);
 
@@ -446,19 +451,50 @@ export const RoomPage: React.FC = () => {
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center min-h-0">
             {/* Box 1: "You" (Left Video) */}
             <div className="relative w-full h-full max-h-[70vh] bg-[#22242b] border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg group">
-              {isCameraEnabled && localStream ? (
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover scale-x-[-1]"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-6 text-center select-none text-surface-400">
+              {/* Video Element - kept in DOM so ref and tracks remain active */}
+              <video
+                ref={(el) => {
+                  localVideoRef.current = el;
+                  if (el && localStream && el.srcObject !== localStream) {
+                    el.srcObject = localStream;
+                    el.play().catch(() => {});
+                  }
+                }}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover scale-x-[-1] ${
+                  isCameraEnabled && localStream ? 'block' : 'hidden'
+                }`}
+              />
+
+              {(!isCameraEnabled || !localStream) && (
+                <div className="flex flex-col items-center justify-center p-6 text-center select-none text-surface-400 z-10 max-w-sm">
                   <VideoOff className="w-12 h-12 mb-3 text-surface-500" />
-                  <span className="text-sm font-semibold">Camera is Turned Off</span>
-                  <span className="text-xs text-surface-500 mt-1">Enable camera using the bottom toolbar</span>
+                  <span className="text-sm font-semibold text-white">
+                    {deviceError || 'Camera is Turned Off'}
+                  </span>
+                  <p className="text-xs text-surface-400 mt-1">
+                    {deviceError
+                      ? 'Please verify browser camera permissions or close other apps using the webcam.'
+                      : 'Click below to enable your camera for live video call and sign detection.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const s = await startLocalMedia();
+                      if (s) {
+                        showToast({
+                          type: 'success',
+                          title: 'Camera Enabled',
+                          message: 'Webcam connected and sign detection ready.',
+                        });
+                      }
+                    }}
+                    className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-colors"
+                  >
+                    Enable Camera Now
+                  </button>
                 </div>
               )}
 
@@ -764,7 +800,7 @@ export const RoomPage: React.FC = () => {
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${aiState === 'active' ? 'bg-emerald-300 animate-pulse' : 'bg-surface-500'}`} />
-                <span>{selectedLanguage} Detection Active</span>
+                <span>{aiState === 'active' ? 'Sign Detection Active' : 'Enable Sign Detection'}</span>
               </button>
 
               {/* Action Buttons: Reset, Speak, Clear */}
@@ -854,30 +890,12 @@ export const RoomPage: React.FC = () => {
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="block text-surface-400 font-semibold mb-2 uppercase">Sign Language System</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLanguage('ASL')}
-                    className={`py-2 px-3 rounded-xl font-bold border transition-colors ${
-                      selectedLanguage === 'ASL'
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-[#22242b] text-surface-400 border-white/5'
-                    }`}
-                  >
-                    American Sign (ASL)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLanguage('ISL')}
-                    className={`py-2 px-3 rounded-xl font-bold border transition-colors ${
-                      selectedLanguage === 'ISL'
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-[#22242b] text-surface-400 border-white/5'
-                    }`}
-                  >
-                    Indian Sign (ISL)
-                  </button>
+                <label className="block text-surface-400 font-semibold mb-2 uppercase">Camera & Video Status</label>
+                <div className="p-3 rounded-xl bg-[#22242b] border border-white/5 text-white flex items-center justify-between">
+                  <span>Webcam Active:</span>
+                  <span className={`font-bold ${isCameraEnabled && localStream ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {isCameraEnabled && localStream ? 'Connected' : 'Off'}
+                  </span>
                 </div>
               </div>
 
