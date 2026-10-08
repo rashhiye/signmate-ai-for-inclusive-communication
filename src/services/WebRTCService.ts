@@ -23,6 +23,7 @@ export interface WebRTCCallback {
   onRemoteStream: (stream: MediaStream) => void;
   onConnectionStateChange: (state: RTCIceConnectionState | RTCPeerConnectionState) => void;
   onMessage?: (message: RoomChatMessage) => void;
+  onLiveCaption?: (caption: { senderId: string; letter: string; text: string }) => void;
   onSignalingStatus?: (status: { rtdbConnected: boolean; error?: string }) => void;
   onPeerCountChange?: (count: number) => void;
 }
@@ -320,6 +321,12 @@ export class WebRTCService {
             await this.addOrQueueCandidate(pc, data.candidate);
           } else if (data.type === 'chat-message' && data.message) {
             this.callbacks?.onMessage?.(data.message);
+          } else if (data.type === 'live-caption' && data.senderId !== this.clientId) {
+            this.callbacks?.onLiveCaption?.({
+              senderId: data.senderId,
+              letter: data.letter || '',
+              text: data.text || '',
+            });
           }
         } catch (err) {
           console.warn('[WebRTC BroadcastChannel Error]', err);
@@ -532,6 +539,20 @@ export class WebRTCService {
         }
       );
       this.unsubscribers.push(unsubMessages);
+
+      // 4b. Listen to live real-time sign caption stream from partner
+      const liveCaptionRef = ref(db, `${roomPath}/liveCaption`);
+      const unsubLiveCaption = onValue(liveCaptionRef, (snapshot) => {
+        const cap = snapshot.val();
+        if (cap && cap.senderId !== this.clientId && Date.now() - (cap.timestamp || 0) < 30000) {
+          this.callbacks?.onLiveCaption?.({
+            senderId: cap.senderId,
+            letter: cap.letter || '',
+            text: cap.text || '',
+          });
+        }
+      });
+      this.unsubscribers.push(unsubLiveCaption);
 
       // 5. Check existing offer in Realtime Database
       const offerSnapshot = await get(offerRef).catch(() => null);
@@ -781,6 +802,40 @@ export class WebRTCService {
         await set(msgRef, msg);
       } catch (err) {
         console.warn('[WebRTC RTDB] Message sending error:', err);
+      }
+    }
+  }
+
+  /**
+   * Broadcasts real-time live sign caption stream (as hands sign each letter/word).
+   */
+  public async sendLiveCaption(letter: string, text: string): Promise<void> {
+    if (!this.currentRoomId) return;
+
+    // 1. Local BroadcastChannel for instant local multi-tab sync
+    try {
+      this.broadcastChannel?.postMessage({
+        type: 'live-caption',
+        senderId: this.clientId,
+        letter,
+        text,
+      });
+    } catch {
+      // ignore
+    }
+
+    // 2. Firebase Realtime Database
+    if (rtdb) {
+      try {
+        const liveRef = ref(rtdb, `rooms/${this.currentRoomId}/liveCaption`);
+        await set(liveRef, {
+          senderId: this.clientId,
+          letter,
+          text,
+          timestamp: Date.now(),
+        });
+      } catch {
+        // ignore
       }
     }
   }

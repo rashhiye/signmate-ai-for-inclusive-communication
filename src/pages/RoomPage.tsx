@@ -27,6 +27,9 @@ import {
   VolumeX,
   Copy,
   Users,
+  Space,
+  Delete,
+  Sparkles,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -64,6 +67,9 @@ export const RoomPage: React.FC = () => {
     clearRecognized,
     speakRecognizedText,
     appendCharacter,
+    deleteLastCharacter,
+    addSpace,
+    selectSuggestion,
   } = useSignAI();
 
   // WebRTC Real Remote Stream states
@@ -73,7 +79,14 @@ export const RoomPage: React.FC = () => {
   const [peerCount, setPeerCount] = useState<number>(1);
   const [rtdbConnected, setRtdbConnected] = useState<boolean>(true);
   const [partnerLiveCaption, setPartnerLiveCaption] = useState<string>('');
+  const [partnerLiveLetter, setPartnerLiveLetter] = useState<string>('');
   const [isSelfLoopback, setIsSelfLoopback] = useState<boolean>(false);
+  const recognizedTextRef = useRef<string>('');
+
+  // Keep recognizedTextRef synchronized with recognition state
+  useEffect(() => {
+    recognizedTextRef.current = recognition.recognizedText;
+  }, [recognition.recognizedText]);
 
   // Real-time Hand Detection state
   const [detectionResult, setDetectionResult] = useState<HandDetectionResult | null>(null);
@@ -90,27 +103,30 @@ export const RoomPage: React.FC = () => {
   const partnerVideoRef = useRef<HTMLVideoElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Chat messages matching screenshot Page 65
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'm1',
-      sender: 'system',
-      text: 'Welcome! Your messages will appear here',
-      time: '10:14 pm',
-    },
-    {
-      id: 'm2',
-      sender: 'system',
-      text: 'Connected to Firebase Realtime Database signaling for ultra-low latency calls.',
-      time: '10:14 pm',
-    },
-    {
-      id: 'm3',
-      sender: 'system',
-      text: 'System: Sign detection started. Show your hand to YOUR camera (left Video)',
-      time: '10:14 pm',
-    },
-  ]);
+  // Dynamic initial timestamps
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return [
+      {
+        id: 'm1',
+        sender: 'system',
+        text: 'Welcome! Your messages and real-time sign captions will appear here.',
+        time: now,
+      },
+      {
+        id: 'm2',
+        sender: 'system',
+        text: 'Connected to Firebase Realtime Database signaling for ultra-low latency calls.',
+        time: now,
+      },
+      {
+        id: 'm3',
+        sender: 'system',
+        text: 'Sign detection active. Show your hand signs to your camera; captions will stream to your partner.',
+        time: now,
+      },
+    ];
+  });
 
   // Start media stream on mount
   useEffect(() => {
@@ -171,6 +187,14 @@ export const RoomPage: React.FC = () => {
         ]);
         setPartnerLiveCaption(roomMsg.text);
       },
+      onLiveCaption: (caption) => {
+        if (caption.letter !== undefined) {
+          setPartnerLiveLetter(caption.letter);
+        }
+        if (caption.text !== undefined) {
+          setPartnerLiveCaption(caption.text);
+        }
+      },
       onSignalingStatus: (status) => {
         setRtdbConnected(status.rtdbConnected);
       },
@@ -223,11 +247,25 @@ export const RoomPage: React.FC = () => {
 
         // ONLY print/append letter when accuracy is >= 85% (0.85) and gesture is stable
         if (result.hasHand && result.letter && result.confidence >= 0.85) {
+          // Immediately stream active letter gesture to partner so they see real-time signing
+          webRTCService.sendLiveCaption(result.letter, recognizedTextRef.current);
+          if (isSelfLoopback) {
+            setPartnerLiveLetter(result.letter);
+          }
+
           if (result.letter === candidateLetter) {
             stableCount++;
             // Require 4 stable frames (~720ms) and active cooldown passed
             if (stableCount >= 4 && cooldown <= 0) {
-              appendCharacter(result.letter);
+              const letter = result.letter;
+              appendCharacter(letter);
+              const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
+              recognizedTextRef.current = updatedBuffer;
+              webRTCService.sendLiveCaption(letter, updatedBuffer);
+              if (isSelfLoopback) {
+                setPartnerLiveLetter(letter);
+                setPartnerLiveCaption(updatedBuffer);
+              }
               stableCount = 0;
               candidateLetter = '';
               cooldown = 6; // cooldown to prevent duplicate spam
@@ -249,7 +287,7 @@ export const RoomPage: React.FC = () => {
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [isCameraEnabled, aiState, appendCharacter]);
+  }, [isCameraEnabled, aiState, appendCharacter, isSelfLoopback]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -281,6 +319,11 @@ export const RoomPage: React.FC = () => {
         };
         setMessages((prev) => [...prev, newMsg]);
         webRTCService.sendMessage(text, user?.displayName || 'You', 'speech');
+        webRTCService.sendLiveCaption('', transcript.trim());
+        if (isSelfLoopback) {
+          setPartnerLiveCaption(transcript.trim());
+          setPartnerLiveLetter('');
+        }
       }
     };
 
@@ -305,7 +348,7 @@ export const RoomPage: React.FC = () => {
         // ignore
       }
     };
-  }, [isListeningSpeech, user?.displayName]);
+  }, [isListeningSpeech, user?.displayName, isSelfLoopback]);
 
   // Handle sending a text message
   const handleSendMessage = (e?: React.FormEvent) => {
@@ -336,13 +379,59 @@ export const RoomPage: React.FC = () => {
     navigate('/dashboard');
   };
 
-  const handleSpeakCurrentBuffer = () => {
-    if (!recognition.recognizedText) {
-      showToast({ type: 'warning', title: 'Nothing to Speak', message: 'No recognized sign text to vocalize.' });
+  // Buffer actions
+  const handleAddSpace = () => {
+    addSpace();
+    const updated = recognizedTextRef.current ? `${recognizedTextRef.current.trimEnd()} ` : '';
+    recognizedTextRef.current = updated;
+    webRTCService.sendLiveCaption(' ', updated);
+    if (isSelfLoopback) {
+      setPartnerLiveLetter(' ');
+      setPartnerLiveCaption(updated);
+    }
+  };
+
+  const handleDeleteChar = () => {
+    deleteLastCharacter();
+    const updated = recognizedTextRef.current.slice(0, -1);
+    recognizedTextRef.current = updated;
+    webRTCService.sendLiveCaption('', updated);
+    if (isSelfLoopback) {
+      setPartnerLiveLetter('');
+      setPartnerLiveCaption(updated);
+    }
+  };
+
+  const handleClearBuffer = () => {
+    clearRecognized();
+    recognizedTextRef.current = '';
+    webRTCService.sendLiveCaption('', '');
+    if (isSelfLoopback) {
+      setPartnerLiveLetter('');
+      setPartnerLiveCaption('');
+    }
+    showToast({ type: 'info', title: 'Buffer Cleared', message: 'Recognized sign buffer reset.' });
+  };
+
+  const handleSelectSuggestion = (word: string) => {
+    selectSuggestion(word);
+    const updated = `${word} `;
+    recognizedTextRef.current = updated;
+    webRTCService.sendLiveCaption(word, updated);
+    if (isSelfLoopback) {
+      setPartnerLiveLetter(word);
+      setPartnerLiveCaption(updated);
+    }
+  };
+
+  const handleSendSignToCall = () => {
+    const textToSend = (recognition.recognizedText || recognizedTextRef.current).trim();
+    if (!textToSend) {
+      showToast({ type: 'warning', title: 'Nothing to Send', message: 'No recognized signs in buffer.' });
       return;
     }
     speakRecognizedText();
-    const text = `[Sign Language]: ${recognition.recognizedText}`;
+    const text = `[Signed]: ${textToSend}`;
     const newMsg: ChatMessage = {
       id: `sign-${Date.now()}`,
       sender: 'you',
@@ -351,13 +440,16 @@ export const RoomPage: React.FC = () => {
     };
     setMessages((prev) => [...prev, newMsg]);
     webRTCService.sendMessage(text, user?.displayName || 'You', 'sign');
-    showToast({ type: 'success', title: 'Text-to-Speech', message: `Speaking: "${recognition.recognizedText}"` });
+    webRTCService.sendLiveCaption('', text);
+    if (isSelfLoopback) {
+      setPartnerLiveCaption(text);
+      setPartnerLiveLetter('');
+    }
+    clearRecognized();
+    recognizedTextRef.current = '';
+    showToast({ type: 'success', title: 'Sign Sent to Call', message: `Spoke & sent: "${textToSend}"` });
   };
 
-  const handleResetDetection = () => {
-    clearRecognized();
-    showToast({ type: 'info', title: 'Detection Reset', message: 'Sign buffer and tracking landmarks reset.' });
-  };
 
   const copyRoomLink = () => {
     const url = `${window.location.origin}/room/${currentRoomId}`;
@@ -629,15 +721,58 @@ export const RoomPage: React.FC = () => {
               )}
 
               {/* Bottom Info Bar inside You tile */}
-              <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
-                <span className="px-2 py-0.5 rounded bg-black/60 text-[11px] text-surface-300 backdrop-blur-sm">
+              <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between gap-2 pointer-events-auto">
+                <span className="px-2.5 py-1 rounded-lg bg-black/70 text-[11px] text-surface-300 backdrop-blur-sm border border-white/5">
                   {isMicEnabled ? 'Microphone On' : 'Microphone Muted'}
                 </span>
-                {recognition.recognizedText && (
-                  <span className="px-3 py-1 rounded-lg bg-blue-600/90 text-white text-xs font-mono font-bold shadow">
-                    Sign: {recognition.recognizedText}
-                  </span>
-                )}
+
+                {/* Quick On-Screen Sign Buffer Controls */}
+                <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10 shadow-lg">
+                  {recognition.recognizedText ? (
+                    <>
+                      <span className="text-xs font-mono font-bold text-white tracking-wider max-w-[120px] sm:max-w-[180px] truncate">
+                        Sign: {recognition.recognizedText}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddSpace}
+                        className="p-1 rounded bg-[#2b2d35] hover:bg-blue-600 text-surface-200 hover:text-white transition-colors cursor-pointer"
+                        title="Add Space to Sign"
+                      >
+                        <Space className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteChar}
+                        className="p-1 rounded bg-[#2b2d35] hover:bg-rose-600 text-surface-200 hover:text-white transition-colors cursor-pointer"
+                        title="Backspace"
+                      >
+                        <Delete className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendSignToCall}
+                        className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Send Sign to Call & Speak"
+                      >
+                        <Send className="w-2.5 h-2.5" />
+                        <span>Send</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearBuffer}
+                        className="p-1 rounded bg-[#2b2d35] hover:bg-[#3b3e49] text-surface-400 hover:text-rose-300 transition-colors cursor-pointer"
+                        title="Clear Buffer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-surface-400 font-sans italic px-1">
+                      {aiState === 'active' ? 'Show sign to camera...' : 'Sign AI Ready'}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -652,17 +787,65 @@ export const RoomPage: React.FC = () => {
                     playsInline
                     className={`w-full h-full object-cover ${isSelfLoopback ? 'scale-x-[-1]' : ''}`}
                   />
-                  {/* Live Caption Overlay for deaf users reading partner's spoken words */}
-                  <div className="absolute bottom-4 left-4 right-4 z-20 bg-black/80 backdrop-blur-md border border-white/15 p-3 rounded-xl shadow-xl">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
-                        Live Speech & Sign Caption (Partner)
-                      </span>
+
+                  {/* Top-Right: Active Partner Sign Gesture Badge */}
+                  {partnerLiveLetter && (
+                    <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-xl border border-blue-400/40 animate-pulse">
+                        <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                        <span>Live Sign:</span>
+                        <span className="px-1.5 py-0.5 rounded bg-black/50 text-yellow-300 font-mono text-sm tracking-wider">
+                          {partnerLiveLetter}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-white leading-snug">
-                      {partnerLiveCaption || '"WebRTC audio/video stream active. You are speaking in real-time."'}
-                    </p>
+                  )}
+
+                  {/* Live Caption Overlay for deaf users reading partner's spoken words or signs */}
+                  <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#121418]/90 backdrop-blur-md border border-white/20 p-3.5 rounded-2xl shadow-2xl transition-all">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+                          <Volume2 className="w-3.5 h-3.5" />
+                          Live Partner Subtitles (Sign & Voice)
+                        </span>
+                      </div>
+                      {partnerLiveLetter && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-mono font-bold">
+                          Active: [{partnerLiveLetter}]
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm sm:text-base font-semibold text-white tracking-wide leading-snug break-words flex-1">
+                        {partnerLiveCaption ? (
+                          <span className="text-white font-medium">{partnerLiveCaption}</span>
+                        ) : (
+                          <span className="text-surface-400 text-xs italic font-normal">
+                            Live sign translations and speech from your partner will appear here in real time...
+                          </span>
+                        )}
+                      </p>
+                      {partnerLiveCaption && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.speechSynthesis) {
+                              window.speechSynthesis.cancel();
+                              const clean = partnerLiveCaption.replace(/^\[.*?\]:\s*/, '');
+                              const u = new SpeechSynthesisUtterance(clean);
+                              window.speechSynthesis.speak(u);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors shadow cursor-pointer"
+                          title="Listen aloud with Voice Synthesis"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>Listen</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -877,9 +1060,9 @@ export const RoomPage: React.FC = () => {
             </form>
 
             {/* Sign Language Detection Section matching Screenshot Page 65 */}
-            <div className="p-4 border-t border-white/10 bg-[#131417] space-y-2.5">
+            <div className="p-4 border-t border-white/10 bg-[#131417] space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-surface-300">Sign Language Detection</span>
+                <span className="text-xs font-semibold text-surface-300">Sign Language AI</span>
                 <span className="text-[10px] text-brand-400 font-mono">
                   {detectionResult?.source === 'keras_model' ? 'Keras Model' : 'Edge AI'}
                 </span>
@@ -889,7 +1072,7 @@ export const RoomPage: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleAI}
-                className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors ${
+                className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer ${
                   aiState === 'active'
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow'
                     : 'bg-[#23262e] hover:bg-[#2e323c] text-surface-300'
@@ -899,47 +1082,94 @@ export const RoomPage: React.FC = () => {
                 <span>{aiState === 'active' ? 'Sign Detection Active' : 'Enable Sign Detection'}</span>
               </button>
 
-              {/* Action Buttons: Reset, Speak, Clear */}
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetDetection}
-                  className="py-2 px-2 rounded-xl bg-[#23262e] hover:bg-[#2f333e] text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors border border-white/5"
-                  title="Reset Detection"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
+              {/* Live Recognized Sign Buffer Card */}
+              <div className="bg-[#191b22] border border-white/10 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-surface-400">
+                  <span className="font-semibold text-surface-300">Live Sign Buffer:</span>
+                  {recognition.currentPrediction && (
+                    <span className="text-amber-400 font-mono font-bold">
+                      Gesture: [{recognition.currentPrediction}] ({Math.round(recognition.confidence * 100)}%)
+                    </span>
+                  )}
+                </div>
+                <div className="min-h-[2.5rem] flex items-center bg-[#101114] border border-white/5 rounded-lg px-3 py-1.5 font-mono text-sm font-bold text-white tracking-wider break-all">
+                  {recognition.recognizedText ? (
+                    recognition.recognizedText
+                  ) : (
+                    <span className="text-surface-500 font-sans text-xs italic font-normal">
+                      Sign to camera to generate words...
+                    </span>
+                  )}
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleSpeakCurrentBuffer}
-                  className="py-2 px-2 rounded-xl bg-[#23262e] hover:bg-[#2f333e] text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors border border-white/5"
-                  title="Speak Text with Voice Synthesis"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                  <span>Speak</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearRecognized();
-                    setMessages([]);
-                    showToast({ type: 'info', title: 'Cleared', message: 'Cleared conversation and buffer.' });
-                  }}
-                  className="py-2 px-2 rounded-xl bg-[#23262e] hover:bg-[#2f333e] text-[11px] font-semibold text-rose-300 flex items-center justify-center gap-1.5 transition-colors border border-white/5"
-                  title="Clear Conversation"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear</span>
-                </button>
+                {/* Buffer Controls: Space, Backspace, Send to Call, Clear */}
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddSpace}
+                    className="py-1.5 rounded-lg bg-[#242730] hover:bg-blue-600 text-surface-200 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-white/5"
+                    title="Insert Space"
+                  >
+                    <Space className="w-3 h-3" />
+                    <span>Space</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteChar}
+                    className="py-1.5 rounded-lg bg-[#242730] hover:bg-rose-600 text-surface-200 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-white/5"
+                    title="Delete last letter"
+                  >
+                    <Delete className="w-3 h-3" />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendSignToCall}
+                    disabled={!recognition.recognizedText}
+                    className="py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow"
+                    title="Send to Partner & Vocalize"
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>Send</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearBuffer}
+                    className="py-1.5 rounded-lg bg-[#242730] hover:bg-[#343846] text-surface-300 hover:text-rose-300 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-white/5"
+                    title="Clear buffer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Quick letter simulation helpers */}
+              {/* Contextual Suggestions Chips */}
+              {recognition.suggestions && recognition.suggestions.length > 0 && (
+                <div className="pt-1">
+                  <span className="text-[10px] text-brand-400 font-semibold block mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    Word Completions:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {recognition.suggestions.map((word) => (
+                      <button
+                        key={word}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(word)}
+                        className="px-2 py-0.5 rounded-lg bg-blue-950/70 hover:bg-blue-600 text-blue-200 hover:text-white text-[11px] font-semibold border border-blue-500/30 transition-colors cursor-pointer"
+                      >
+                        {word}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick gesture simulation helpers */}
               <div className="pt-1">
-                <span className="text-[10px] text-surface-500 uppercase font-semibold block mb-1">
-                  Test Gestures:
+                <span className="text-[10px] text-surface-400 uppercase font-semibold block mb-1">
+                  Quick Sign Gestures:
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {['HELLO', 'THANK YOU', 'YES', 'NO', 'HELP'].map((word) => (
@@ -948,6 +1178,8 @@ export const RoomPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         appendCharacter(word + ' ');
+                        const updated = `${recognizedTextRef.current ? recognizedTextRef.current.trimEnd() + ' ' : ''}${word} `;
+                        recognizedTextRef.current = updated;
                         const text = `[Signed]: ${word}`;
                         const newMsg: ChatMessage = {
                           id: `sign-${Date.now()}`,
@@ -957,8 +1189,13 @@ export const RoomPage: React.FC = () => {
                         };
                         setMessages((prev) => [...prev, newMsg]);
                         webRTCService.sendMessage(text, user?.displayName || 'You', 'sign');
+                        webRTCService.sendLiveCaption(word, updated);
+                        if (isSelfLoopback) {
+                          setPartnerLiveLetter(word);
+                          setPartnerLiveCaption(updated);
+                        }
                       }}
-                      className="px-2 py-1 rounded bg-[#202227] hover:bg-blue-600 hover:text-white text-[10px] text-surface-300 border border-white/5 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-[#202227] hover:bg-blue-600 hover:text-white text-[10px] font-semibold text-surface-300 border border-white/5 transition-colors cursor-pointer"
                     >
                       {word}
                     </button>

@@ -11,6 +11,8 @@ export interface UseSignAIResult {
   setPanelOpen: (open: boolean) => void;
   clearRecognized: () => void;
   appendCharacter: (char: string) => void;
+  deleteLastCharacter: () => void;
+  addSpace: () => void;
   selectSuggestion: (word: string) => void;
   speakRecognizedText: () => void;
   simulateTestDetection: (char: string, confidence?: number) => void;
@@ -21,10 +23,10 @@ export function useSignAI(): UseSignAIResult {
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(false);
   const [recognition, setRecognition] = useState<RecognitionState>({
     state: 'off',
-    recognizedText: 'HEL',
-    currentPrediction: 'L',
-    confidence: 0.96,
-    suggestions: ['HELLO', 'HELP', 'HEALTH'],
+    recognizedText: '',
+    currentPrediction: null,
+    confidence: 0,
+    suggestions: [],
     error: null,
   });
 
@@ -124,6 +126,24 @@ export function useSignAI(): UseSignAIResult {
     }));
   }, []);
 
+  const deleteLastCharacter = useCallback(() => {
+    setRecognition((r) => ({
+      ...r,
+      recognizedText: r.recognizedText.slice(0, -1),
+      currentPrediction: null,
+      suggestions: [],
+    }));
+  }, []);
+
+  const addSpace = useCallback(() => {
+    setRecognition((r) => ({
+      ...r,
+      recognizedText: r.recognizedText ? `${r.recognizedText.trimEnd()} ` : '',
+      currentPrediction: null,
+      suggestions: [],
+    }));
+  }, []);
+
   return {
     aiState,
     isPanelOpen,
@@ -133,6 +153,8 @@ export function useSignAI(): UseSignAIResult {
     setPanelOpen,
     clearRecognized,
     appendCharacter,
+    deleteLastCharacter,
+    addSpace,
     selectSuggestion,
     speakRecognizedText,
     simulateTestDetection,
