@@ -43,9 +43,22 @@ export class HandSignDetector {
 
   private getFastApiBaseUrl(): string {
     const custom = import.meta.env.VITE_AI_API_BASE_URL;
+    if (typeof window === 'undefined') return custom || '';
+
+    const hostname = window.location.hostname || '';
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isLanIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+
+    // If hosted on a public domain (e.g. Vercel), never query localhost HTTP
+    if (!isLocal && !isLanIp) {
+      if (custom && !custom.includes('localhost') && !custom.includes('127.0.0.1')) {
+        return custom;
+      }
+      return '';
+    }
+
     if (custom) return custom;
-    if (typeof window === 'undefined') return '';
-    const rawHost = window.location.hostname || '127.0.0.1';
+    const rawHost = hostname || '127.0.0.1';
     const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
     return `http://${host}:8000`;
   }

@@ -53,6 +53,25 @@ export interface FastApiAiConfig {
 
 export function getFastApiConfig(): FastApiAiConfig {
   const custom = import.meta.env.VITE_AI_API_BASE_URL;
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  const isLanIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+
+  if (!isLocal && !isLanIp) {
+    if (custom && !custom.includes('localhost') && !custom.includes('127.0.0.1')) {
+      return {
+        baseUrl: custom,
+        inferenceEndpoint: '/api/v1/predict',
+        timeoutMs: 5000,
+      };
+    }
+    return {
+      baseUrl: '',
+      inferenceEndpoint: '',
+      timeoutMs: 5000,
+    };
+  }
+
   if (custom) {
     return {
       baseUrl: custom,
@@ -60,16 +79,8 @@ export function getFastApiConfig(): FastApiAiConfig {
       timeoutMs: 5000,
     };
   }
-  // If running over HTTPS, route through Vite proxy to eliminate Mixed Content blocking
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    return {
-      baseUrl: window.location.origin,
-      inferenceEndpoint: '/api/v1/predict',
-      timeoutMs: 5000,
-    };
-  }
 
-  const rawHost = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
+  const rawHost = hostname || '127.0.0.1';
   const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
   return {
     baseUrl: `http://${host}:8000`,

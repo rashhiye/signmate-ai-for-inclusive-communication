@@ -58,16 +58,33 @@ export class WebRTCService {
   private callbacks: WebRTCCallback | null = null;
   private isCleanedUp: boolean = false;
 
+  private isFastApiAvailable: boolean = false;
+  private hasCheckedFastApi: boolean = false;
+
   private getFastApiUrl(): string {
     const custom = import.meta.env.VITE_AI_API_BASE_URL;
+    if (typeof window === 'undefined') return custom || '';
+
+    const hostname = window.location.hostname || '';
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isLanIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+
+    // If hosted on a public domain (like Vercel), never try to query localhost HTTP
+    if (!isLocal && !isLanIp) {
+      if (custom && !custom.includes('localhost') && !custom.includes('127.0.0.1')) {
+        return custom;
+      }
+      return '';
+    }
+
     if (custom) return custom;
-    if (typeof window === 'undefined') return '';
-    const rawHost = window.location.hostname || '127.0.0.1';
+    const rawHost = hostname || '127.0.0.1';
     const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
     return `http://${host}:8000`;
   }
 
   private async postFastApiSignal(signalType: string, payload: any) {
+    if (this.hasCheckedFastApi && !this.isFastApiAvailable) return;
     const baseUrl = this.getFastApiUrl();
     if (!baseUrl || !this.currentRoomId) return;
     try {
@@ -81,8 +98,12 @@ export class WebRTCService {
         }),
         signal: AbortSignal.timeout(1000),
       });
+      this.isFastApiAvailable = true;
+      this.hasCheckedFastApi = true;
     } catch {
-      // Offline or ignored
+      // Server is offline, stop further attempts
+      this.isFastApiAvailable = false;
+      this.hasCheckedFastApi = true;
     }
   }
 
@@ -368,9 +389,18 @@ export class WebRTCService {
       } catch {
         failCount++;
       }
+
+      if (failCount >= 2) {
+        if (this.fastApiPollTimer !== null) {
+          window.clearInterval(this.fastApiPollTimer);
+          this.fastApiPollTimer = null;
+        }
+        this.isFastApiAvailable = false;
+        this.hasCheckedFastApi = true;
+      }
     };
 
-    this.fastApiPollTimer = window.setInterval(poll, 1000);
+    this.fastApiPollTimer = window.setInterval(poll, 1500);
   }
 
   /**
