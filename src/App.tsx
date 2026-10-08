@@ -17,12 +17,6 @@ import { RoomPage } from './pages/RoomPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SecurityPage } from './pages/common/SecurityPage';
 
-// Admin Portal Pages (Matching Report Modules & Screenshots)
-import { AdminHomePage } from './pages/admin/AdminHomePage';
-import { AdminUsersPage } from './pages/admin/AdminUsersPage';
-import { AdminComplaintsPage } from './pages/admin/AdminComplaintsPage';
-import { AdminFeedbacksPage } from './pages/admin/AdminFeedbacksPage';
-
 // User Portal Pages (Matching Report Modules & Screenshots)
 import { UserFriendsPage } from './pages/user/UserFriendsPage';
 import { UserDirectoryPage } from './pages/user/UserDirectoryPage';
@@ -35,7 +29,6 @@ const AppLayout: React.FC = () => {
   const location = useLocation();
   const isRoomView = location.pathname.startsWith('/room/');
   const isPortalView =
-    location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/user/') ||
     location.pathname === '/dashboard' ||
     isRoomView;
@@ -77,13 +70,9 @@ const AppLayout: React.FC = () => {
           <Route path="/user/friends" element={<UserFriendsPage />} />
           <Route path="/user/profile" element={<UserProfilePage />} />
 
-          {/* Admin Portal Modules (Screenshot Page 64 & Tables Pages 30-31) */}
-          <Route path="/admin" element={<Navigate to="/admin/home" replace />} />
-          <Route path="/admin/home" element={<AdminHomePage />} />
-          <Route path="/admin/security" element={<SecurityPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/complaints" element={<AdminComplaintsPage />} />
-          <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
+          {/* Legacy /admin redirects */}
+          <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/admin/*" element={<Navigate to="/dashboard" replace />} />
 
           {/* Real-time Video Call Room (Screenshot Page 65) */}
           <Route path="/room" element={<Navigate to={`/room/SM-${Math.random().toString(36).substring(2, 7).toUpperCase()}`} replace />} />

@@ -4,13 +4,12 @@ import { VoxelBackground } from '../components/VoxelBackground';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { SignMateLogo } from '../components/brand/SignMateLogo';
-import { User, Lock, Eye, EyeOff, Shield, ArrowRight, Sparkles, Smartphone } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, ArrowRight, Sparkles, Smartphone } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isAdminMode, setIsAdminMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -29,25 +28,13 @@ export const LoginPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      if (isAdminMode) {
-        if (email.includes('admin') || password === 'admin123') {
-          showToast({
-            type: 'success',
-            title: 'Admin Access Granted',
-            message: 'Logged in as System Administrator.',
-          });
-          navigate('/admin/home');
-          return;
-        }
-      }
-
       await login({ email, password });
       showToast({
         type: 'success',
         title: 'Welcome Back',
         message: 'Successfully logged in to SignMate.',
       });
-      navigate(isAdminMode ? '/admin/home' : '/dashboard');
+      navigate('/dashboard');
     } catch (err: unknown) {
       const errObj = err as Error;
       setErrorMsg(errObj.message || 'Login failed. Check your credentials.');
@@ -56,36 +43,14 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const fillDemoCredentials = (role: 'user' | 'admin') => {
-    if (role === 'admin') {
-      setIsAdminMode(true);
-      setEmail('admin@signmate.org');
-      setPassword('admin123');
-    } else {
-      setIsAdminMode(false);
-      setEmail('sangee@gmail.com');
-      setPassword('SignMate@2026');
-    }
+  const fillDemoCredentials = () => {
+    setEmail('sangee@gmail.com');
+    setPassword('SignMate@2026');
   };
 
-  const handleQuickLogin = async (role: 'user' | 'admin') => {
+  const handleQuickLogin = async () => {
     setErrorMsg(null);
     setIsSubmitting(true);
-    if (role === 'admin') {
-      setIsAdminMode(true);
-      setEmail('admin@signmate.org');
-      setPassword('admin123');
-      showToast({
-        type: 'success',
-        title: 'Admin Access Granted',
-        message: 'Logged in as System Administrator.',
-      });
-      navigate('/admin/home');
-      setIsSubmitting(false);
-      return;
-    }
-
-    setIsAdminMode(false);
     setEmail('sangee@gmail.com');
     setPassword('SignMate@2026');
     try {
@@ -127,33 +92,6 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          {/* User / Admin Portal Toggle */}
-          <div className="flex rounded-lg bg-black/40 border border-white/10 p-1 mb-5">
-            <button
-              type="button"
-              onClick={() => setIsAdminMode(false)}
-              className={`flex-1 py-2 text-xs font-semibold rounded-md transition-all ${
-                !isAdminMode
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-surface-400 hover:text-white'
-              }`}
-            >
-              User Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAdminMode(true)}
-              className={`flex-1 py-2 text-xs font-semibold rounded-md transition-all flex items-center justify-center gap-1.5 ${
-                isAdminMode
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-surface-400 hover:text-white'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              Admin Portal
-            </button>
-          </div>
-
           {/* Mobile / Local Network Guidance banner for Unauthorized Domain */}
           {isUnauthorizedDomain && (
             <div className="p-3.5 rounded-xl text-xs bg-amber-950/80 border border-amber-500/50 text-amber-200 mb-5 space-y-2">
@@ -167,17 +105,10 @@ export const LoginPage: React.FC = () => {
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => handleQuickLogin('user')}
+                  onClick={handleQuickLogin}
                   className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-colors"
                 >
-                  1-Tap User Sign-In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('admin')}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
-                >
-                  1-Tap Admin Sign-In
+                  1-Tap Demo Sign-In
                 </button>
               </div>
             </div>
@@ -266,7 +197,7 @@ export const LoginPage: React.FC = () => {
                 try {
                   await loginWithGoogle();
                   showToast({ type: 'success', title: 'Google Sign-In', message: 'Welcome to SignMate!' });
-                  navigate(isAdminMode ? '/admin/home' : '/dashboard');
+                  navigate('/dashboard');
                 } catch (err: unknown) {
                   const error = err as Error;
                   setErrorMsg(error.message);
@@ -296,36 +227,26 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* 1-Tap Mobile Quick Access Buttons */}
+          {/* 1-Tap Mobile Quick Access Button */}
           <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
             <div className="flex items-center justify-between text-[11px] text-[#888]">
-              <span>1-Tap Quick Sign-In:</span>
+              <span>Quick Demo Access:</span>
               <button
                 type="button"
-                onClick={() => fillDemoCredentials('user')}
+                onClick={fillDemoCredentials}
                 className="hover:text-white transition-colors text-[10px]"
               >
                 Pre-fill fields
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('user')}
-                className="py-2.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                <span>1-Tap User</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin')}
-                className="py-2.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Shield className="w-3.5 h-3.5 text-brand-400" />
-                <span>1-Tap Admin</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleQuickLogin}
+              className="w-full py-2.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 active:scale-[0.98] border border-white/10 text-white font-medium text-xs flex items-center justify-center gap-2 transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+              <span>1-Tap Demo Sign-In</span>
+            </button>
           </div>
 
           {/* Links Container */}

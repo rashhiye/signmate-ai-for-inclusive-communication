@@ -4,7 +4,7 @@ export interface UserProfile {
   email: string;
   phone?: string;
   photo?: string;
-  role: 'user' | 'admin';
+  role?: 'user';
   status: 'online' | 'offline' | 'in-call';
   bio?: string;
   createdAt: number;

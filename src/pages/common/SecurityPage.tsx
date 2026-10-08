@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { UserSidebar } from '../../components/user/UserSidebar';
-import { AdminSidebar } from '../../components/admin/AdminSidebar';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Key, Shield, Eye, EyeOff, Check, Lock, Smartphone } from 'lucide-react';
 
 export const SecurityPage: React.FC = () => {
-  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
-
-  const isAdminView = location.pathname.startsWith('/admin');
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -64,8 +60,8 @@ export const SecurityPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex bg-[#0c0d10] text-[#e0e0e0] font-['Montserrat',sans-serif]">
-      {/* Sidebar based on portal view */}
-      {isAdminView ? <AdminSidebar /> : <UserSidebar />}
+      {/* User Sidebar */}
+      <UserSidebar />
 
       {/* Main Content Area */}
       <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
@@ -79,7 +75,7 @@ export const SecurityPage: React.FC = () => {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold tracking-wide text-white">
-                    {isAdminView ? 'ADMIN SECURITY SETTINGS' : 'SECURITY & PASSWORD'}
+                    SECURITY & PASSWORD
                   </h1>
                   <p className="text-xs text-[#8e94a0]">
                     Manage access credentials, password policies, and active sessions
@@ -88,7 +84,7 @@ export const SecurityPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => navigate(isAdminView ? '/admin/home' : '/dashboard')}
+              onClick={() => navigate('/dashboard')}
               className="text-xs text-surface-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
             >
               Back to Home
@@ -234,7 +230,7 @@ export const SecurityPage: React.FC = () => {
                   <div>
                     <span className="text-surface-500 block text-[10px] uppercase">Role Authorization</span>
                     <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                      {isAdminView ? 'SYSTEM ADMINISTRATOR' : 'VERIFIED USER'}
+                      VERIFIED USER
                     </span>
                   </div>
                 </div>

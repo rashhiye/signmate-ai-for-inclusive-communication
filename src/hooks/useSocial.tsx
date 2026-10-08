@@ -67,16 +67,6 @@ const INITIAL_USERS: UserProfile[] = [
     bio: 'Deaf community teacher',
     createdAt: Date.now() - 7000000,
   },
-  {
-    id: 'admin-01',
-    name: 'Platform Administrator',
-    email: 'admin@signmate.org',
-    phone: '9995000111',
-    role: 'admin',
-    status: 'online',
-    bio: 'SignMate system admin and grievance manager',
-    createdAt: Date.now() - 20000000,
-  },
 ];
 
 const INITIAL_COMPLAINTS: Complaint[] = [
@@ -282,7 +272,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       showToast({
         type: 'success',
         title: 'Complaint Submitted',
-        message: 'Your report has been logged. Admin will review and issue a reply.',
+        message: 'Your report has been logged. Support team will review and issue a reply.',
       });
     },
     [user, showToast]

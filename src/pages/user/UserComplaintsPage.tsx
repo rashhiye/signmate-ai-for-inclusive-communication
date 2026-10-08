@@ -24,10 +24,10 @@ export const UserComplaintsPage: React.FC = () => {
         <div className="border-b border-white/5 pb-4">
           <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white flex items-center gap-2">
             <AlertTriangle className="w-6 h-6 text-rose-400" />
-            <span>Grievance & Complaint Portal</span>
+            <span>Grievance & Feedback Portal</span>
           </h1>
           <p className="text-xs text-[#8e94a0] mt-0.5">
-            Submit technical reports or system feedback. Administrators examine reports and issue direct replies.
+            Submit technical reports or system feedback. Our support team examines reports and issues direct replies.
           </p>
         </div>
 
@@ -61,7 +61,7 @@ export const UserComplaintsPage: React.FC = () => {
         <div className="space-y-3 max-w-3xl">
           <h2 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-brand-400" />
-            <span>Your Submitted Complaints & Admin Replies</span>
+            <span>Your Submitted Complaints & Support Replies</span>
           </h2>
 
           <div className="space-y-3">
@@ -91,7 +91,7 @@ export const UserComplaintsPage: React.FC = () => {
                 {item.reply && (
                   <div className="p-3 rounded-lg bg-black/40 border border-emerald-500/20 text-xs text-emerald-200 space-y-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
-                      Admin Formal Reply ({item.replyDate}):
+                      Support Team Reply ({item.replyDate}):
                     </span>
                     <p className="leading-relaxed">"{item.reply}"</p>
                   </div>
