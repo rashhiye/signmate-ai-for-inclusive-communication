@@ -31,7 +31,6 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
   landmarks,
   letter,
   confidence = 0,
-  source = 'mediapipe_landmarks',
   isMirrored = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -145,33 +144,6 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
               Hold hand in frame to detect sign
             </span>
           </div>
-        </div>
-      )}
-
-      {/* Top right detector status pill */}
-      {hasHand && (
-        <div
-          className={`absolute top-3 right-3 backdrop-blur-md px-2.5 py-1 rounded-lg border flex items-center gap-1.5 shadow-lg ${
-            confidence >= 0.85
-              ? 'bg-black/80 border-emerald-500/60'
-              : 'bg-black/80 border-amber-500/50'
-          }`}
-        >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              confidence >= 0.85 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-            }`}
-          />
-          <span
-            className={`text-[11px] font-bold font-mono ${
-              confidence >= 0.85 ? 'text-emerald-300' : 'text-amber-300'
-            }`}
-          >
-            {letter ? `${letter} (${Math.round(confidence * 100)}%)` : 'Scanning Hand...'}
-          </span>
-          <span className="text-[9px] text-[#8e94a0] uppercase border-l border-white/10 pl-1.5 font-sans">
-            {source === 'keras_model' ? 'Keras' : 'MediaPipe'} • {confidence >= 0.85 ? '≥85% Print' : '<85%'}
-          </span>
         </div>
       )}
     </div>

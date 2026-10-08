@@ -103,26 +103,14 @@ export const RoomPage: React.FC = () => {
   const partnerVideoRef = useRef<HTMLVideoElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic initial timestamps
+  // Clean initial messages
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return [
       {
         id: 'm1',
         sender: 'system',
-        text: 'Welcome! Your messages and real-time sign captions will appear here.',
-        time: now,
-      },
-      {
-        id: 'm2',
-        sender: 'system',
-        text: 'Connected to Firebase Realtime Database signaling for ultra-low latency calls.',
-        time: now,
-      },
-      {
-        id: 'm3',
-        sender: 'system',
-        text: 'Sign detection active. Show your hand signs to your camera; captions will stream to your partner.',
+        text: '👋 Welcome to SignMate. Live sign translations, voice subtitles, and chat will stream here in real-time.',
         time: now,
       },
     ];
@@ -466,11 +454,15 @@ export const RoomPage: React.FC = () => {
       {/* Top Header Bar matching Screenshot Page 65 */}
       <header className="h-14 bg-[#141518] border-b border-white/10 px-4 flex items-center justify-between shrink-0">
         {/* Left: Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs tracking-wider">
+        <div
+          onClick={() => navigate('/dashboard')}
+          className="flex items-center gap-3 cursor-pointer group"
+          title="Go to Dashboard"
+        >
+          <div className="w-8 h-8 rounded-lg bg-brand-500 group-hover:bg-brand-400 flex items-center justify-center text-white font-bold text-xs tracking-wider transition-colors shadow">
             SM
           </div>
-          <span className="font-bold text-base tracking-wide text-white">SignMate</span>
+          <span className="font-bold text-base tracking-wide text-white group-hover:text-blue-300 transition-colors">SignMate</span>
         </div>
 
         {/* Center: Room Code & Action Buttons */}
@@ -479,7 +471,7 @@ export const RoomPage: React.FC = () => {
             <span>{currentRoomId}</span>
             <button
               onClick={copyRoomLink}
-              className="text-surface-400 hover:text-white"
+              className="text-surface-400 hover:text-white cursor-pointer"
               title="Copy Room Link"
             >
               <Copy className="w-3.5 h-3.5" />
@@ -491,7 +483,7 @@ export const RoomPage: React.FC = () => {
               navigate(`/room/${newCode}`);
               showToast({ type: 'success', title: 'New Room Created', message: `Room code: ${newCode}` });
             }}
-            className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             Create Room
@@ -505,15 +497,39 @@ export const RoomPage: React.FC = () => {
                 showToast({ type: 'info', title: 'Connecting to Room', message: `Joining ${normalized}...` });
               }
             }}
-            className="px-3 py-1 rounded bg-[#292b32] hover:bg-[#343740] border border-white/10 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1 rounded bg-[#292b32] hover:bg-[#343740] border border-white/10 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
             Join Room
           </button>
         </div>
 
-        {/* Right: User badge, RTDB indicator & Video call active status */}
+        {/* Right: Voice subtitle toggle, user badge & status */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Voice Subtitles Toggle for Hearing Callers */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsListeningSpeech(!isListeningSpeech);
+              showToast({
+                type: 'info',
+                title: !isListeningSpeech ? 'Voice Subtitles ON' : 'Voice Subtitles OFF',
+                message: !isListeningSpeech
+                  ? 'Transcribing your voice into live captions for your partner.'
+                  : 'Voice transcription paused.',
+              });
+            }}
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+              isListeningSpeech
+                ? 'bg-blue-600/30 border-blue-500/60 text-blue-300'
+                : 'bg-[#202227] border-white/10 text-surface-400 hover:text-white'
+            }`}
+            title="Toggle Live Voice-to-Text Subtitles"
+          >
+            <Mic className="w-3.5 h-3.5 text-blue-400" />
+            <span>Voice Subtitles: {isListeningSpeech ? 'ON' : 'OFF'}</span>
+          </button>
+
           <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-[#202227] border border-white/10 text-xs text-surface-300">
             <span className="font-mono text-white font-semibold">{user?.displayName || currentRoomId}</span>
             <span className="text-[10px] text-surface-500 font-mono">({peerCount} in room)</span>
@@ -691,18 +707,18 @@ export const RoomPage: React.FC = () => {
                 You
               </div>
 
-              {/* Top-Right: Detection Indicator Banner matching Screenshot Page 65 */}
+              {/* Top-Right: Detection Indicator Badge */}
               <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg backdrop-blur-md border text-[11px] font-semibold shadow transition-colors ${
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border text-xs font-semibold shadow-lg transition-all ${
                   detectionResult?.hasHand
-                    ? 'bg-[#272a33]/90 border-yellow-500/60 text-yellow-300'
-                    : 'bg-black/50 border-white/10 text-surface-400'
+                    ? 'bg-black/80 border-amber-500/60 text-amber-300'
+                    : 'bg-black/60 border-white/10 text-surface-400'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${detectionResult?.hasHand ? 'bg-yellow-400 animate-ping' : 'bg-surface-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${detectionResult?.hasHand ? 'bg-amber-400 animate-ping' : 'bg-surface-500'}`} />
                   <span>
                     {detectionResult?.hasHand
-                      ? `Detection: Hand Detected [${detectionResult.letter}]`
-                      : 'Detection: Ready'}
+                      ? `Sign: [${detectionResult.letter}] ${Math.round((detectionResult.confidence || 0) * 100)}%`
+                      : 'Sign Detection Ready'}
                   </span>
                 </div>
               </div>
@@ -858,7 +874,11 @@ export const RoomPage: React.FC = () => {
                     <p className="text-xs text-surface-400 mt-1">
                       Share this room code or link to connect via WebRTC Realtime Database:
                     </p>
-                    <span className="font-mono text-sm text-blue-400 font-bold block mt-1">
+                    <span
+                      onClick={copyRoomLink}
+                      className="font-mono text-sm text-blue-400 font-bold block mt-1 hover:text-blue-300 cursor-pointer underline decoration-dotted"
+                      title="Click to copy room code"
+                    >
                       {currentRoomId}
                     </span>
                   </div>
@@ -1245,7 +1265,7 @@ export const RoomPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsListeningSpeech(!isListeningSpeech)}
-                  className={`w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border transition-colors ${
+                  className={`w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border transition-colors cursor-pointer ${
                     isListeningSpeech
                       ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
                       : 'bg-[#22242b] border-white/5 text-surface-400'
@@ -1253,6 +1273,24 @@ export const RoomPage: React.FC = () => {
                 >
                   <span>Auto-Transcribe Hearing Voice</span>
                   {isListeningSpeech ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-surface-400 font-semibold mb-2 uppercase">Voice Synthesis (TTS)</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.speechSynthesis) {
+                      window.speechSynthesis.cancel();
+                      const u = new SpeechSynthesisUtterance('SignMate text to speech audio is functioning correctly.');
+                      window.speechSynthesis.speak(u);
+                    }
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl font-semibold flex items-center justify-between border bg-[#22242b] border-white/5 text-surface-200 hover:text-white hover:bg-[#2c2f38] transition-colors cursor-pointer"
+                >
+                  <span>Test Voice Output</span>
+                  <Volume2 className="w-4 h-4 text-blue-400" />
                 </button>
               </div>
             </div>
