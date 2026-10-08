@@ -176,7 +176,7 @@ export const RoomPage: React.FC = () => {
     return () => {
       webRTCService.cleanup();
     };
-  }, [localStream, currentRoomId, showToast, isSelfLoopback]);
+  }, [localStream, currentRoomId, showToast]);
 
   // Attach remote stream whenever partnerVideoRef or remoteStream updates
   useEffect(() => {
@@ -336,6 +336,15 @@ export const RoomPage: React.FC = () => {
       return;
     }
     speakRecognizedText();
+    const text = `[Sign Language]: ${recognition.recognizedText}`;
+    const newMsg: ChatMessage = {
+      id: `sign-${Date.now()}`,
+      sender: 'you',
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMessages((prev) => [...prev, newMsg]);
+    webRTCService.sendMessage(text, user?.displayName || 'You', 'sign');
     showToast({ type: 'success', title: 'Text-to-Speech', message: `Speaking: "${recognition.recognizedText}"` });
   };
 

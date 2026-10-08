@@ -45,9 +45,11 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
 
     // Match canvas dimensions to parent display
     const rect = canvas.getBoundingClientRect();
-    if (canvas.width !== rect.width || canvas.height !== rect.height) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+    const displayWidth = Math.floor(rect.width) || 640;
+    const displayHeight = Math.floor(rect.height) || 480;
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -165,7 +167,7 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
               confidence >= 0.85 ? 'text-emerald-300' : 'text-amber-300'
             }`}
           >
-            {letter} ({Math.round(confidence * 100)}%)
+            {letter ? `${letter} (${Math.round(confidence * 100)}%)` : 'Scanning Hand...'}
           </span>
           <span className="text-[9px] text-[#8e94a0] uppercase border-l border-white/10 pl-1.5 font-sans">
             {source === 'keras_model' ? 'Keras' : 'MediaPipe'} • {confidence >= 0.85 ? '≥85% Print' : '<85%'}

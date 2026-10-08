@@ -50,10 +50,40 @@ export class WebRTCService {
   private clientId: string = `peer_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`;
   private queuedCandidates: RTCIceCandidateInit[] = [];
   private processedCandidates: Set<string> = new Set();
+  private myLocalCandidates: RTCIceCandidateInit[] = [];
+  private fastApiPollTimer: number | null = null;
+  private lastFastApiSignalTime: number = 0;
   private hasAnswered: boolean = false;
   private hasOffered: boolean = false;
   private callbacks: WebRTCCallback | null = null;
   private isCleanedUp: boolean = false;
+
+  private getFastApiUrl(): string {
+    const custom = import.meta.env.VITE_AI_API_BASE_URL;
+    if (custom) return custom;
+    if (typeof window === 'undefined') return '';
+    const host = window.location.hostname || 'localhost';
+    return `http://${host}:8000`;
+  }
+
+  private async postFastApiSignal(signalType: string, payload: any) {
+    const baseUrl = this.getFastApiUrl();
+    if (!baseUrl || !this.currentRoomId) return;
+    try {
+      await fetch(`${baseUrl}/api/v1/webrtc/${this.currentRoomId}/signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: this.clientId,
+          signal_type: signalType,
+          payload,
+        }),
+        signal: AbortSignal.timeout(1000),
+      });
+    } catch {
+      // Offline or ignored
+    }
+  }
 
   /**
    * Initializes real WebRTC peer connection using Firebase Realtime Database
@@ -118,6 +148,7 @@ export class WebRTCService {
     pc.onicecandidate = (event) => {
       if (!event.candidate || !this.currentRoomId) return;
       const candidateJson = event.candidate.toJSON();
+      this.myLocalCandidates.push(candidateJson);
 
       // (a) BroadcastChannel (zero-latency local tab connection)
       try {
@@ -139,12 +170,18 @@ export class WebRTCService {
           // graceful fallback
         }
       }
+
+      // (c) Local FastAPI Signaling Hub (LAN & Offline fallback)
+      this.postFastApiSignal('candidate', candidateJson);
     };
 
-    // 6. Setup Local BroadcastChannel Signaling
+    // 6. Setup Local BroadcastChannel Signaling with greeting handshake
     this.setupBroadcastSignaling(this.currentRoomId, pc);
 
-    // 7. Setup Firebase Realtime Database Signaling
+    // 7. Setup Local FastAPI WebRTC Signaling Hub (cross-device LAN coordination)
+    this.setupFastApiSignaling(this.currentRoomId, pc);
+
+    // 8. Setup Firebase Realtime Database Signaling
     await this.setupRealtimeDatabaseSignaling(this.currentRoomId, pc);
 
     // Safety fallback: if after 1.8s no offer exists, initiate one
@@ -205,7 +242,24 @@ export class WebRTCService {
         if (!data || data.senderId === this.clientId) return;
 
         try {
-          if (data.type === 'offer' && !this.hasAnswered && pc.signalingState === 'stable') {
+          if (data.type === 'peer-join') {
+            // Re-announce offer to newly joined peer
+            if (pc.localDescription && pc.localDescription.type === 'offer') {
+              channel.postMessage({
+                type: 'offer',
+                senderId: this.clientId,
+                offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+              });
+            }
+            // Send all gathered ICE candidates
+            this.myLocalCandidates.forEach((cand) => {
+              channel.postMessage({
+                type: 'ice-candidate',
+                senderId: this.clientId,
+                candidate: cand,
+              });
+            });
+          } else if (data.type === 'offer' && !this.hasAnswered && pc.signalingState === 'stable') {
             await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
             await this.flushQueuedCandidates(pc);
             const answer = await pc.createAnswer();
@@ -214,7 +268,16 @@ export class WebRTCService {
             channel.postMessage({
               type: 'answer',
               senderId: this.clientId,
-              answer,
+              answer: { type: answer.type, sdp: answer.sdp },
+            });
+
+            // Re-send our gathered candidates to callee
+            this.myLocalCandidates.forEach((cand) => {
+              channel.postMessage({
+                type: 'ice-candidate',
+                senderId: this.clientId,
+                candidate: cand,
+              });
             });
 
             // Mirror answer to RTDB
@@ -225,6 +288,9 @@ export class WebRTCService {
                 timestamp: Date.now(),
               }).catch(() => {});
             }
+
+            // Mirror answer to FastAPI
+            this.postFastApiSignal('answer', { type: answer.type, sdp: answer.sdp });
           } else if (data.type === 'answer' && pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
             await this.flushQueuedCandidates(pc);
@@ -237,9 +303,66 @@ export class WebRTCService {
           console.warn('[WebRTC BroadcastChannel Error]', err);
         }
       };
+
+      // Announce arrival to any peers already present in the room
+      channel.postMessage({
+        type: 'peer-join',
+        senderId: this.clientId,
+      });
     } catch {
       // BroadcastChannel unsupported
     }
+  }
+
+  /**
+   * Layer 2: FastAPI WebRTC Signaling Hub (Guaranteed fallback across devices on local network)
+   */
+  private setupFastApiSignaling(roomId: string, pc: RTCPeerConnection) {
+    const baseUrl = this.getFastApiUrl();
+    if (!baseUrl) return;
+
+    this.lastFastApiSignalTime = Date.now() / 1000 - 30;
+
+    const poll = async () => {
+      if (this.isCleanedUp || this.peerConnection !== pc) return;
+      try {
+        const res = await fetch(
+          `${baseUrl}/api/v1/webrtc/${roomId}/signals?sender_id=${encodeURIComponent(
+            this.clientId
+          )}&since=${this.lastFastApiSignalTime}`,
+          { signal: AbortSignal.timeout(1000) }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.signals)) {
+            for (const sig of data.signals) {
+              if (sig.timestamp > this.lastFastApiSignalTime) {
+                this.lastFastApiSignalTime = sig.timestamp;
+              }
+              if (sig.sender_id === this.clientId) continue;
+
+              if (sig.signal_type === 'offer' && !this.hasAnswered && pc.signalingState === 'stable') {
+                await pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
+                await this.flushQueuedCandidates(pc);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                this.hasAnswered = true;
+                this.postFastApiSignal('answer', { type: answer.type, sdp: answer.sdp });
+              } else if (sig.signal_type === 'answer' && pc.signalingState === 'have-local-offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
+                await this.flushQueuedCandidates(pc);
+              } else if (sig.signal_type === 'candidate' && sig.payload) {
+                await this.addOrQueueCandidate(pc, sig.payload);
+              }
+            }
+          }
+        }
+      } catch {
+        // FastAPI poll network error (handled silently)
+      }
+    };
+
+    this.fastApiPollTimer = window.setInterval(poll, 1000);
   }
 
   /**
@@ -375,6 +498,9 @@ export class WebRTCService {
           offer,
         });
 
+        // Mirror offer to FastAPI
+        this.postFastApiSignal('offer', { type: offer.type, sdp: offer.sdp });
+
         // Listen for callee answer in RTDB
         const unsubAnswer = onValue(
           answerRef,
@@ -492,6 +618,9 @@ export class WebRTCService {
             timestamp: Date.now(),
           }).catch(() => {});
         }
+
+        // Mirror offer to FastAPI
+        this.postFastApiSignal('offer', { type: offer.type, sdp: offer.sdp });
       } catch (e) {
         console.warn('[initiateOffer error]', e);
       }
@@ -544,6 +673,11 @@ export class WebRTCService {
   public cleanup() {
     this.isCleanedUp = true;
 
+    if (this.fastApiPollTimer) {
+      window.clearInterval(this.fastApiPollTimer);
+      this.fastApiPollTimer = null;
+    }
+
     // Unsubscribe all RTDB listeners
     this.unsubscribers.forEach((u) => {
       try {
@@ -588,6 +722,7 @@ export class WebRTCService {
     this.hasAnswered = false;
     this.hasOffered = false;
     this.queuedCandidates = [];
+    this.myLocalCandidates = [];
     this.processedCandidates.clear();
     this.callbacks = null;
   }

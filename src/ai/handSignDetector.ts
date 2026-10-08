@@ -229,7 +229,7 @@ export class HandSignDetector {
           const json = await res.json();
           const label = json.label;
           // Accept Keras prediction if high confidence and non-empty/non-background
-          if (label && label !== '0' && json.confidence >= 0.85) {
+          if (label && label !== '0' && json.confidence >= 0.7) {
             const kerasResult: HandDetectionResult = {
               hasHand: true,
               box,
