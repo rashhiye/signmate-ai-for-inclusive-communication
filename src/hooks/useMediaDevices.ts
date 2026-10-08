@@ -30,12 +30,15 @@ export function useMediaDevices(): UseMediaDevicesResult {
 
   // Check hardware availability and permissions on mount
   useEffect(() => {
+    if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setDeviceError('INSECURE_NETWORK_ORIGIN');
+      setCameraAvailable(false);
+      setMicAvailable(false);
+      return;
+    }
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-      if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        setDeviceError('Camera access requires HTTPS or localhost origin.');
-      } else {
-        setDeviceError('Media devices API not supported in this browser environment.');
-      }
+      setDeviceError('Media devices API not supported in this browser environment.');
       setCameraAvailable(false);
       setMicAvailable(false);
       return;
@@ -82,10 +85,11 @@ export function useMediaDevices(): UseMediaDevicesResult {
   const startLocalMedia = useCallback(async (): Promise<MediaStream | null> => {
     setDeviceError(null);
     try {
+      if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        throw new Error('INSECURE_NETWORK_ORIGIN');
+      }
+
       if (!navigator.mediaDevices?.getUserMedia) {
-        if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-          throw new Error('Camera access requires a secure context (HTTPS or localhost). Please open SignMate via localhost or enable HTTPS.');
-        }
         throw new Error('Camera and microphone access is not supported in this browser.');
       }
 

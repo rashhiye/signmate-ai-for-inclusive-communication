@@ -99,7 +99,9 @@ export class HandSignDetector {
     }
 
     try {
-      const res = await fetch(`${baseUrl}/`, {
+      const isHttpsProxy = baseUrl.startsWith('https://') || (typeof window !== 'undefined' && baseUrl === window.location.origin);
+      const healthUrl = isHttpsProxy ? `${baseUrl}/fastapi_status` : `${baseUrl}/`;
+      const res = await fetch(healthUrl, {
         method: 'GET',
         signal: AbortSignal.timeout(1000),
       });

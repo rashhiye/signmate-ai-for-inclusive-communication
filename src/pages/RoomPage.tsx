@@ -443,6 +443,43 @@ export const RoomPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Network Origin Insecure Context Banner */}
+      {deviceError === 'INSECURE_NETWORK_ORIGIN' && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3 shrink-0 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+            <span>
+              Browsing via HTTP IP (<strong>{window.location.hostname}</strong>). Browsers require HTTPS or localhost to enable the camera.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const u = new URL(window.location.href);
+                u.protocol = 'https:';
+                window.location.href = u.toString();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition-colors shrink-0 shadow flex items-center gap-1.5 cursor-pointer"
+            >
+              <VideoIcon className="w-3.5 h-3.5" />
+              <span>Switch to HTTPS</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const u = new URL(window.location.href);
+                u.hostname = 'localhost';
+                window.location.href = u.toString();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-[#2b2d35] hover:bg-[#383b45] text-surface-200 font-semibold text-xs transition-colors shrink-0 border border-white/10 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Use localhost</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area: Video Split Grid + Right Deaf Mode Drawer */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Video Area */}
@@ -470,31 +507,73 @@ export const RoomPage: React.FC = () => {
 
               {(!isCameraEnabled || !localStream) && (
                 <div className="flex flex-col items-center justify-center p-6 text-center select-none text-surface-400 z-10 max-w-sm">
-                  <VideoOff className="w-12 h-12 mb-3 text-surface-500" />
-                  <span className="text-sm font-semibold text-white">
-                    {deviceError || 'Camera is Turned Off'}
-                  </span>
-                  <p className="text-xs text-surface-400 mt-1">
-                    {deviceError
-                      ? 'Please verify browser camera permissions or close other apps using the webcam.'
-                      : 'Click below to enable your camera for live video call and sign detection.'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const s = await startLocalMedia();
-                      if (s) {
-                        showToast({
-                          type: 'success',
-                          title: 'Camera Enabled',
-                          message: 'Webcam connected and sign detection ready.',
-                        });
-                      }
-                    }}
-                    className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-colors"
-                  >
-                    Enable Camera Now
-                  </button>
+                  {deviceError === 'INSECURE_NETWORK_ORIGIN' ? (
+                    <div className="p-4 rounded-2xl bg-[#16181e]/95 border border-amber-500/30 text-center shadow-2xl backdrop-blur-md">
+                      <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-3 text-amber-400">
+                        <VideoOff className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-bold text-white mb-1">Webcam Blocked on Network IP</h4>
+                      <p className="text-xs text-surface-300 leading-relaxed mb-4">
+                        Web browsers block webcam access on raw IP addresses (<code className="text-amber-300 font-mono text-[11px]">{window.location.hostname}</code>) over plain HTTP.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const u = new URL(window.location.href);
+                            u.protocol = 'https:';
+                            window.location.href = u.toString();
+                          }}
+                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <VideoIcon className="w-4 h-4" />
+                          <span>Switch to HTTPS (Recommended)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const u = new URL(window.location.href);
+                            u.hostname = 'localhost';
+                            window.location.href = u.toString();
+                          }}
+                          className="w-full py-2 px-4 rounded-xl bg-[#2b2d35] hover:bg-[#383b45] text-surface-200 text-xs font-semibold border border-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <span>Open on localhost (This PC)</span>
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-surface-500 mt-2.5 leading-normal">
+                        Note: When switching to HTTPS with local dev SSL, click <em>Advanced → Proceed</em> if your browser prompts.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <VideoOff className="w-12 h-12 mb-3 text-surface-500" />
+                      <span className="text-sm font-semibold text-white">
+                        {deviceError || 'Camera is Turned Off'}
+                      </span>
+                      <p className="text-xs text-surface-400 mt-1">
+                        {deviceError
+                          ? 'Please verify browser camera permissions or close other apps using the webcam.'
+                          : 'Click below to enable your camera for live video call and sign detection.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const s = await startLocalMedia();
+                          if (s) {
+                            showToast({
+                              type: 'success',
+                              title: 'Camera Enabled',
+                              message: 'Webcam connected and sign detection ready.',
+                            });
+                          }
+                        }}
+                        className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-colors"
+                      >
+                        Enable Camera Now
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -519,8 +598,8 @@ export const RoomPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Real Hand Landmark & Skeletal Overlay */}
-              {isCameraEnabled && (
+              {/* Real Hand Landmark & Skeletal Overlay - ONLY when camera stream is active */}
+              {isCameraEnabled && localStream && (
                 <HandLandmarkOverlay
                   hasHand={!!detectionResult?.hasHand}
                   landmarks={detectionResult?.landmarks}

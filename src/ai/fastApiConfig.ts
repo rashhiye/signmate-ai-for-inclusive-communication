@@ -60,6 +60,15 @@ export function getFastApiConfig(): FastApiAiConfig {
       timeoutMs: 5000,
     };
   }
+  // If running over HTTPS, route through Vite proxy to eliminate Mixed Content blocking
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return {
+      baseUrl: window.location.origin,
+      inferenceEndpoint: '/api/v1/predict',
+      timeoutMs: 5000,
+    };
+  }
+
   const rawHost = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
   const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
   return {
