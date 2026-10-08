@@ -427,14 +427,15 @@ export class HandSignDetector {
 
       // 'K': Thumb upright between index and middle knuckles
       if (
-        (isThumbUp || this.dist(lm[4], lm[6]) < palmScale * 0.52) &&
-        dIndexMiddle >= 0.22
+        (isThumbUp || this.dist(lm[4], lm[6]) < palmScale * 0.50) &&
+        !isThumbAcrossPalm &&
+        dIndexMiddle >= 0.20
       ) {
         return { letter: 'K', confidence: 0.96 };
       }
 
-      // 'V': Peace sign - fingers spread apart in 'V'
-      if (dIndexMiddle >= 0.28) {
+      // 'V': Peace sign - fingers spread apart in 'V' with thumb folded across palm
+      if (dIndexMiddle >= 0.25) {
         return { letter: 'V', confidence: 0.98 };
       }
 

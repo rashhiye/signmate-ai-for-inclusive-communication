@@ -246,7 +246,8 @@ export const RoomPage: React.FC = () => {
     let isMounted = true;
     let stableCount = 0;
     let candidateLetter = '';
-    let cooldown = 0;
+    let lastCommittedLetter = '';
+    let releaseCount = 0;
 
     const intervalId = window.setInterval(async () => {
       if (!localVideoRef.current || !isMounted) return;
@@ -256,23 +257,40 @@ export const RoomPage: React.FC = () => {
 
         setDetectionResult(result);
 
-        if (cooldown > 0) {
-          cooldown--;
+        // Detect hand release or neutral state to allow signing the same letter again
+        if (!result.hasHand || !result.letter || result.confidence < 0.70) {
+          releaseCount++;
+          // When hand is dropped, pulled away, or relaxed for 2 frames (~360ms), reset committed letter
+          if (releaseCount >= 2) {
+            lastCommittedLetter = '';
+            candidateLetter = '';
+            stableCount = 0;
+          }
+        } else {
+          releaseCount = 0;
         }
 
         // Stream active detected sign in real-time
         if (result.hasHand && result.letter && result.confidence >= 0.75) {
-          // Immediately stream active letter gesture to partner so they see real-time signing
+          // Immediately stream active letter gesture badge to partner in real-time
           webRTCService.sendLiveCaption(result.letter, recognizedTextRef.current);
           if (isSelfLoopback) {
             setPartnerLiveLetter(result.letter);
+          }
+
+          // Anti-spam rule: If user is STILL holding the exact same letter that was already committed,
+          // do NOT append it again. Just stream the live gesture badge.
+          if (result.letter === lastCommittedLetter) {
+            candidateLetter = '';
+            stableCount = 0;
+            return;
           }
 
           // Commit letter to sentence buffer when held stable for 3 frames (~540ms) with >= 80% confidence
           if (result.confidence >= 0.80) {
             if (result.letter === candidateLetter) {
               stableCount++;
-              if (stableCount >= 3 && cooldown <= 0) {
+              if (stableCount >= 3) {
                 const letter = result.letter;
                 appendCharacter(letter);
                 const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
@@ -282,9 +300,9 @@ export const RoomPage: React.FC = () => {
                   setPartnerLiveLetter(letter);
                   setPartnerLiveCaption(updatedBuffer);
                 }
+                lastCommittedLetter = letter;
                 stableCount = 0;
                 candidateLetter = '';
-                cooldown = 4; // cooldown to prevent duplicate spam
               }
             } else {
               candidateLetter = result.letter;

@@ -54,7 +54,8 @@ export const UserOfflineDetectionPage: React.FC = () => {
     let isMounted = true;
     let candidateLetter = '';
     let stableCount = 0;
-    let cooldown = 0;
+    let lastCommittedLetter = '';
+    let releaseCount = 0;
 
     const intervalId = window.setInterval(async () => {
       if (!videoRef.current || !isMounted) return;
@@ -64,19 +65,39 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
         setDetectionResult(result);
 
+        // Detect hand release or neutral state to allow signing the same letter again
+        if (!result.hasHand || !result.letter || result.confidence < 0.70) {
+          releaseCount++;
+          // When hand is dropped, pulled away, or relaxed for 2 frames (~360ms), reset committed letter
+          if (releaseCount >= 2) {
+            lastCommittedLetter = '';
+            candidateLetter = '';
+            stableCount = 0;
+          }
+        } else {
+          releaseCount = 0;
+        }
+
         if (result.hasHand && result.letter) {
           setCurrentGesture(result.letter);
 
-          // Append letter when accuracy is >= 80% (0.80) and held stable
+          // Anti-spam rule: If user is STILL holding the exact same letter that was already committed,
+          // do NOT append it again.
+          if (result.letter === lastCommittedLetter) {
+            candidateLetter = '';
+            stableCount = 0;
+            return;
+          }
+
+          // Append letter when accuracy is >= 80% (0.80) and held stable for 3 frames (~540ms)
           if (result.confidence >= 0.80) {
             if (result.letter === candidateLetter) {
               stableCount++;
-              // Commit when held stable for 3 cycles (~540ms)
-              if (stableCount >= 3 && cooldown <= 0) {
+              if (stableCount >= 3) {
                 setRecognizedSignText((prev) => prev + result.letter);
+                lastCommittedLetter = result.letter;
                 stableCount = 0;
                 candidateLetter = '';
-                cooldown = 4;
               }
             } else {
               candidateLetter = result.letter;
@@ -91,10 +112,6 @@ export const UserOfflineDetectionPage: React.FC = () => {
           setCurrentGesture('');
           candidateLetter = '';
           stableCount = 0;
-        }
-
-        if (cooldown > 0) {
-          cooldown--;
         }
       } catch {
         // continue loop
