@@ -60,7 +60,8 @@ export function getFastApiConfig(): FastApiAiConfig {
       timeoutMs: 5000,
     };
   }
-  const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+  const rawHost = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
+  const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
   return {
     baseUrl: `http://${host}:8000`,
     inferenceEndpoint: '/api/v1/predict',

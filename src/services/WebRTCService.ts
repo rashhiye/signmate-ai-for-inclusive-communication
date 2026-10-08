@@ -62,7 +62,8 @@ export class WebRTCService {
     const custom = import.meta.env.VITE_AI_API_BASE_URL;
     if (custom) return custom;
     if (typeof window === 'undefined') return '';
-    const host = window.location.hostname || 'localhost';
+    const rawHost = window.location.hostname || '127.0.0.1';
+    const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
     return `http://${host}:8000`;
   }
 
@@ -322,9 +323,13 @@ export class WebRTCService {
     if (!baseUrl) return;
 
     this.lastFastApiSignalTime = Date.now() / 1000 - 30;
+    let failCount = 0;
 
     const poll = async () => {
       if (this.isCleanedUp || this.peerConnection !== pc) return;
+      // Exponential backoff: if server offline, only retry every 8 seconds
+      if (failCount >= 3 && Date.now() % 8000 > 1200) return;
+
       try {
         const res = await fetch(
           `${baseUrl}/api/v1/webrtc/${roomId}/signals?sender_id=${encodeURIComponent(
@@ -333,6 +338,7 @@ export class WebRTCService {
           { signal: AbortSignal.timeout(1000) }
         );
         if (res.ok) {
+          failCount = 0;
           const data = await res.json();
           if (data && Array.isArray(data.signals)) {
             for (const sig of data.signals) {
@@ -356,9 +362,11 @@ export class WebRTCService {
               }
             }
           }
+        } else {
+          failCount++;
         }
       } catch {
-        // FastAPI poll network error (handled silently)
+        failCount++;
       }
     };
 

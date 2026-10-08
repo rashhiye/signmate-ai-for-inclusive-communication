@@ -45,7 +45,8 @@ export class HandSignDetector {
     const custom = import.meta.env.VITE_AI_API_BASE_URL;
     if (custom) return custom;
     if (typeof window === 'undefined') return '';
-    const host = window.location.hostname || 'localhost';
+    const rawHost = window.location.hostname || '127.0.0.1';
+    const host = rawHost === 'localhost' ? '127.0.0.1' : rawHost;
     return `http://${host}:8000`;
   }
 
