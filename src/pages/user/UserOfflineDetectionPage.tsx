@@ -13,15 +13,18 @@ import {
   Delete,
   Space,
   CheckCircle,
+  Sparkles,
 } from 'lucide-react';
 import { handSignDetector, type HandDetectionResult } from '../../ai/handSignDetector';
 import { HandLandmarkOverlay } from '../../components/ai/HandLandmarkOverlay';
+import { dictionaryService } from '../../services/dictionaryService';
 
 export const UserOfflineDetectionPage: React.FC = () => {
   const { localStream, startLocalMedia, stopLocalMedia, isCameraEnabled, deviceError } = useMediaDevices();
   const { showToast } = useToast();
 
   const [recognizedSignText, setRecognizedSignText] = useState('');
+  const [wordSuggestions, setWordSuggestions] = useState<string[]>([]);
   const [currentGesture, setCurrentGesture] = useState<string>('');
   const [detectionResult, setDetectionResult] = useState<HandDetectionResult | null>(null);
   const [isListeningSpeech, setIsListeningSpeech] = useState(false);
@@ -94,8 +97,15 @@ export const UserOfflineDetectionPage: React.FC = () => {
             if (result.letter === candidateLetter) {
               stableCount++;
               if (stableCount >= 3) {
-                setRecognizedSignText((prev) => prev + result.letter);
-                lastCommittedLetter = result.letter;
+                const letter = result.letter;
+                setRecognizedSignText((prev) => {
+                  const next = prev + letter;
+                  const words = next.split(/\s+/);
+                  const lastWord = (words[words.length - 1] || '').toUpperCase();
+                  setWordSuggestions(lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : []);
+                  return next;
+                });
+                lastCommittedLetter = letter;
                 stableCount = 0;
                 candidateLetter = '';
               }
@@ -206,20 +216,45 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
   const appendLetter = (char: string) => {
     setCurrentGesture(char);
-    setRecognizedSignText((prev) => prev + char);
+    setRecognizedSignText((prev) => {
+      const next = prev + char.toUpperCase();
+      const words = next.split(/\s+/);
+      const lastWord = (words[words.length - 1] || '').toUpperCase();
+      setWordSuggestions(lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : []);
+      return next;
+    });
+  };
+
+  const selectSuggestion = (word: string) => {
+    setRecognizedSignText((prev) => {
+      const trimmed = prev.trimEnd();
+      const lastSpaceIndex = trimmed.lastIndexOf(' ');
+      const prefix = lastSpaceIndex >= 0 ? trimmed.substring(0, lastSpaceIndex + 1) : '';
+      const updated = `${prefix}${word.toUpperCase()} `;
+      setWordSuggestions([]);
+      return updated;
+    });
   };
 
   const handleSpace = () => {
     setRecognizedSignText((prev) => (prev ? prev + ' ' : ''));
+    setWordSuggestions([]);
   };
 
   const handleBackspace = () => {
-    setRecognizedSignText((prev) => prev.slice(0, -1));
+    setRecognizedSignText((prev) => {
+      const next = prev.slice(0, -1);
+      const words = next.split(/\s+/);
+      const lastWord = (words[words.length - 1] || '').toUpperCase();
+      setWordSuggestions(lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : []);
+      return next;
+    });
   };
 
   const clearSigns = () => {
     setRecognizedSignText('');
     setCurrentGesture('');
+    setWordSuggestions([]);
   };
 
   return (
@@ -434,6 +469,28 @@ export const UserOfflineDetectionPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Word Completion Chips from dictionary_compact.json */}
+              {wordSuggestions.length > 0 && (
+                <div className="p-3 bg-brand-950/40 border border-brand-500/20 rounded-xl space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs text-brand-300 font-semibold">
+                    <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Word Completions (Dictionary):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {wordSuggestions.map((word) => (
+                      <button
+                        key={word}
+                        type="button"
+                        onClick={() => selectSuggestion(word)}
+                        className="px-2.5 py-1 rounded-lg bg-blue-900/60 hover:bg-blue-600 text-blue-100 hover:text-white text-xs font-semibold border border-blue-400/30 transition-colors cursor-pointer select-none"
+                      >
+                        {word}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

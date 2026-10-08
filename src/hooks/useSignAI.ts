@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { AIState, RecognitionState } from '../types/ai';
 import { announceToScreenReader } from '../utils/a11y';
+import { dictionaryService } from '../services/dictionaryService';
 
 export interface UseSignAIResult {
   aiState: AIState;
@@ -67,60 +68,11 @@ export function useSignAI(): UseSignAIResult {
   const appendCharacter = useCallback((char: string) => {
     setRecognition((r) => {
       const nextText = r.recognizedText + char.toUpperCase();
-      const sampleDictionary: Record<string, string[]> = {
-        H: ['HELLO', 'HELP', 'HOW', 'HAVE'],
-        HE: ['HELLO', 'HELP', 'HEALTH', 'HEAR'],
-        HEL: ['HELLO', 'HELP', 'HEALTH'],
-        HELL: ['HELLO'],
-        T: ['THANK YOU', 'TODAY', 'TIME', 'THERE'],
-        TH: ['THANK YOU', 'THANKS', 'THAT', 'THIS'],
-        THA: ['THANK YOU', 'THANKS'],
-        N: ['NAME', 'NICE', 'NEED', 'NO'],
-        NO: ['NO', 'NOTHING', 'NOW'],
-        Y: ['YES', 'YOU', 'YOUR', 'WELCOME'],
-        YE: ['YES', 'YESTERDAY'],
-        P: ['PLEASE', 'PEOPLE', 'PERFECT'],
-        PL: ['PLEASE', 'PLAY'],
-        PLE: ['PLEASE'],
-        G: ['GOOD', 'GREAT', 'GLAD', 'GO'],
-        GO: ['GOOD', 'GOODBYE', 'GOING'],
-        M: ['ME', 'MY', 'MORNING', 'MEET'],
-        ME: ['MEET', 'ME', 'MESSAGE'],
-        W: ['WHAT', 'WHERE', 'WHEN', 'WHY', 'WELCOME'],
-        WH: ['WHAT', 'WHERE', 'WHEN', 'WHY'],
-        S: ['SIGN', 'SORRY', 'SEE', 'SURE'],
-        SO: ['SORRY', 'SOON'],
-        F: ['FINE', 'FRIEND', 'FOR', 'FEEL'],
-        FR: ['FRIEND', 'FROM'],
-        C: ['CAN', 'CALL', 'COME', 'CARE'],
-        CA: ['CAN', 'CALL'],
-        B: ['BYE', 'BEAUTIFUL', 'BAD', 'BEST'],
-        BY: ['BYE', 'BYE BYE'],
-        L: ['LOVE', 'LIKE', 'LEARN', 'LOOK'],
-        LO: ['LOVE', 'LOOK'],
-        D: ['DEAF', 'DAY', 'DO'],
-        DE: ['DEAF'],
-        DEA: ['DEAF'],
-        A: ['ALL', 'AND', 'ARE', 'ABOUT'],
-        AL: ['ALL', 'ALRIGHT', 'ALWAYS'],
-        OK: ['OKAY'],
-        O: ['OKAY', 'ONE', 'OPEN'],
-        I: ['I AM', 'IMPORTANT', 'IS'],
-        U: ['UNDERSTAND', 'USE', 'UP'],
-        UN: ['UNDERSTAND'],
-        UND: ['UNDERSTAND'],
-        R: ['READY', 'RIGHT', 'REALLY'],
-        RE: ['READY', 'REALLY'],
-      };
-
       const words = nextText.split(/\s+/);
       const lastWord = (words[words.length - 1] || '').toUpperCase();
 
-      const suggestions = sampleDictionary[lastWord] || (lastWord.length >= 2 ? [
-        `${lastWord}O`,
-        `${lastWord}E`,
-        `${lastWord}ING`,
-      ] : []);
+      // Query words starting with this prefix from dictionary_compact.json
+      const suggestions = dictionaryService.getWordSuggestions(lastWord, 8);
 
       return {
         ...r,
@@ -169,12 +121,18 @@ export function useSignAI(): UseSignAIResult {
   }, []);
 
   const deleteLastCharacter = useCallback(() => {
-    setRecognition((r) => ({
-      ...r,
-      recognizedText: r.recognizedText.slice(0, -1),
-      currentPrediction: null,
-      suggestions: [],
-    }));
+    setRecognition((r) => {
+      const nextText = r.recognizedText.slice(0, -1);
+      const words = nextText.split(/\s+/);
+      const lastWord = (words[words.length - 1] || '').toUpperCase();
+      const suggestions = lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : [];
+      return {
+        ...r,
+        recognizedText: nextText,
+        currentPrediction: null,
+        suggestions,
+      };
+    });
   }, []);
 
   const addSpace = useCallback(() => {
