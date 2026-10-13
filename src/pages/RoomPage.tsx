@@ -39,6 +39,62 @@ interface ChatMessage {
   time: string;
 }
 
+interface RemoteParticipantTileProps {
+  stream?: MediaStream;
+  peerLabel: string;
+  badgeLabel: string;
+  badgeColor?: string;
+  fitMode: 'cover' | 'contain';
+}
+
+const RemoteParticipantTile: React.FC<RemoteParticipantTileProps> = ({
+  stream,
+  peerLabel,
+  badgeLabel,
+  badgeColor = 'bg-blue-400',
+  fitMode,
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn(`[RemoteParticipantTile] Play caught for ${peerLabel}:`, err);
+      });
+    }
+  }, [stream, peerLabel]);
+
+  return (
+    <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
+      {stream ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className={`w-full h-full ${fitMode === 'contain' ? 'object-contain' : 'object-cover'} object-center`}
+        />
+      ) : (
+        <div className="text-center p-4 text-surface-400 space-y-2 select-none">
+          <div className="w-12 h-12 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-300 font-bold text-sm animate-pulse">
+            <Users className="w-5 h-5" />
+          </div>
+          <h4 className="text-xs font-semibold text-white">{peerLabel}</h4>
+          <span className="text-[10px] text-surface-400 block">Connecting live video & audio...</span>
+        </div>
+      )}
+
+      {/* Peer Badge */}
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-xs font-semibold text-white shadow-md">
+        <span className={`w-2 h-2 rounded-full ${badgeColor} ${stream ? 'animate-pulse' : ''}`} />
+        <span>{badgeLabel}</span>
+      </div>
+    </div>
+  );
+};
+
 export const RoomPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -75,6 +131,7 @@ export const RoomPage: React.FC = () => {
 
   // WebRTC Real Remote Stream states
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remotePeers, setRemotePeers] = useState<Map<string, { peerId: string; stream: MediaStream }>>(new Map());
   const [webRtcStatus, setWebRtcStatus] = useState<string>('disconnected');
   const [isPartnerConnected, setIsPartnerConnected] = useState(false);
   const [peerCount, setPeerCount] = useState<number>(1);
@@ -191,6 +248,21 @@ export const RoomPage: React.FC = () => {
           message: 'Real WebRTC live video & audio stream established.',
         });
       },
+      onPeerStream: (peerId, stream) => {
+        setIsPartnerConnected(true);
+        setRemotePeers((prev) => {
+          const next = new Map(prev);
+          next.set(peerId, { peerId, stream });
+          return next;
+        });
+      },
+      onPeerLeave: (peerId) => {
+        setRemotePeers((prev) => {
+          const next = new Map(prev);
+          next.delete(peerId);
+          return next;
+        });
+      },
       onConnectionStateChange: (state) => {
         setWebRtcStatus(state);
         if (state === 'connected') {
@@ -252,21 +324,24 @@ export const RoomPage: React.FC = () => {
 
     return () => {
       webRTCService.cleanup();
+      setRemotePeers(new Map());
     };
   }, [localStream, currentRoomId, showToast, isSelfLoopback]);
 
   // Attach remote stream whenever partnerVideoRef or remoteStream updates
   useEffect(() => {
+    const remoteList = Array.from(remotePeers.values());
+    const firstRemoteStream = remoteList[0]?.stream || remoteStream;
     if (partnerVideoRef.current) {
       if (isSelfLoopback && localStream) {
         partnerVideoRef.current.srcObject = localStream;
         partnerVideoRef.current.play().catch(() => {});
-      } else if (remoteStream) {
-        partnerVideoRef.current.srcObject = remoteStream;
+      } else if (firstRemoteStream) {
+        partnerVideoRef.current.srcObject = firstRemoteStream;
         partnerVideoRef.current.play().catch(() => {});
       }
     }
-  }, [remoteStream, isPartnerConnected, isSelfLoopback, localStream]);
+  }, [remotePeers, remoteStream, isPartnerConnected, isSelfLoopback, localStream]);
 
   // Real Sign Language Detection Loop (webcam frame -> hand ROI -> classifier)
   useEffect(() => {
@@ -591,12 +666,14 @@ export const RoomPage: React.FC = () => {
   // Dynamic WhatsApp Call grid:
   // Mobile: 2 vertically stacked equal tiles (WhatsApp mobile style)
   // Desktop: 2 equal side-by-side vertical columns (WhatsApp desktop / Meet style)
-  const effectivePeerCount = Math.min(4, Math.max(1, peerCount));
+  const remoteList = Array.from(remotePeers.values());
+  const effectivePeerCount = Math.min(4, Math.max(peerCount, remoteList.length + 1));
+  const totalTiles = Math.min(4, Math.max(effectivePeerCount, isPartnerConnected ? 2 : 1));
   const getGridClasses = () => {
-    if (effectivePeerCount <= 2) {
+    if (totalTiles <= 2) {
       return 'grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1';
     }
-    if (effectivePeerCount === 3) {
+    if (totalTiles === 3) {
       // 3 users: 1 top hero + 2 bottom on mobile; 3 equal columns on desktop
       return 'grid-cols-2 md:grid-cols-3 grid-rows-2 md:grid-rows-1';
     }
@@ -605,7 +682,7 @@ export const RoomPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] max-h-[100dvh] overflow-hidden bg-[#0d0f14] text-[#e2e8f0] font-['Montserrat',sans-serif] select-none relative">
+    <div className="flex-1 flex flex-col h-screen max-h-screen h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#0d0f14] text-[#e2e8f0] font-['Montserrat',sans-serif] select-none relative">
       {/* WhatsApp Call Header Bar */}
       <header className="h-14 bg-[#12141a]/95 border-b border-white/10 px-3 sm:px-5 flex items-center justify-between shrink-0 z-20 backdrop-blur-xl">
         {/* Left: Brand & Room code */}
@@ -646,7 +723,7 @@ export const RoomPage: React.FC = () => {
             </span>
           </div>
           <span className="text-[11px] text-surface-400 font-mono px-2 py-0.5 rounded-full bg-[#1b1e26] border border-white/5">
-            {effectivePeerCount}/4 in call
+            {Math.min(4, Math.max(peerCount, remoteList.length + 1))}/4 in call
           </span>
         </div>
 
@@ -701,12 +778,12 @@ export const RoomPage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Edge-to-Edge WhatsApp Call Video Stage */}
-      <main className="flex-1 relative overflow-hidden flex flex-col p-2 sm:p-3 bg-[#0a0c10]" aria-label="Video Call Feed">
+      {/* Main Edge-to-Edge WhatsApp Call Video Stage - Padded cleanly above bottom controls */}
+      <main className="flex-1 relative overflow-hidden flex flex-col p-2 sm:p-3 pb-36 sm:pb-40 md:pb-44 bg-[#0a0c10]" aria-label="Video Call Feed">
         {/* Fullscreen Video Grid (WhatsApp Video Call style with 1, 2, 3, or 4 tiles) */}
         <div className={`flex-1 grid ${getGridClasses()} gap-2 sm:gap-3 items-stretch justify-center h-full min-h-0 relative`}>
           {/* Tile 1: "You" (Local Webcam with Hand Landmarks) */}
-          <div className={`relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl group ${effectivePeerCount === 3 ? 'col-span-2 md:col-span-1' : ''}`}>
+          <div className={`relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl group ${totalTiles === 3 ? 'col-span-2 md:col-span-1' : ''}`}>
             <video
               ref={(el) => {
                 localVideoRef.current = el;
@@ -809,9 +886,9 @@ export const RoomPage: React.FC = () => {
             )}
           </div>
 
-          {/* Tile 2: "Partner" (Remote WebRTC Stream / Waiting State) */}
+          {/* Tile 2: "Partner 1" (Remote WebRTC Stream / Waiting State) */}
           <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
-            {isPartnerConnected && (remoteStream || isSelfLoopback) ? (
+            {isPartnerConnected && (remoteList[0]?.stream || remoteStream || isSelfLoopback) ? (
               <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
                 <video
                   ref={partnerVideoRef}
@@ -842,7 +919,7 @@ export const RoomPage: React.FC = () => {
                 )}
 
                 {/* Floating Partner Subtitles Card (WhatsApp Call Style) */}
-                <div className="absolute bottom-4 left-3 right-3 sm:left-4 sm:right-4 z-20 bg-[#101217]/90 backdrop-blur-xl border border-white/15 p-3 rounded-2xl shadow-2xl">
+                <div className="absolute bottom-3 left-3 right-3 sm:left-4 sm:right-4 z-20 bg-[#101217]/90 backdrop-blur-xl border border-white/15 p-2.5 sm:p-3 rounded-2xl shadow-2xl">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -926,35 +1003,26 @@ export const RoomPage: React.FC = () => {
             )}
           </div>
 
-          {/* Additional Dynamic Tiles for 3rd & 4th Participants */}
-          {effectivePeerCount >= 3 && (
-            <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
-              <div className="text-center p-4 text-surface-400 space-y-2">
-                <div className="w-12 h-12 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-300 font-bold text-sm">
-                  P3
-                </div>
-                <h4 className="text-xs font-bold text-white">Participant 3</h4>
-                <span className="text-[10px] text-emerald-400 font-semibold block">Connected</span>
-              </div>
-              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-black/60 text-xs font-semibold text-white">
-                Partner 2
-              </div>
-            </div>
+          {/* Tile 3: Partner 2 (Real 3rd Participant Live Stream with Audio & Video) */}
+          {totalTiles >= 3 && (
+            <RemoteParticipantTile
+              stream={remoteList[1]?.stream}
+              peerLabel="Participant 3"
+              badgeLabel="Partner 2"
+              badgeColor="bg-blue-400"
+              fitMode={videoFit}
+            />
           )}
 
-          {effectivePeerCount >= 4 && (
-            <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
-              <div className="text-center p-4 text-surface-400 space-y-2">
-                <div className="w-12 h-12 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-300 font-bold text-sm">
-                  P4
-                </div>
-                <h4 className="text-xs font-bold text-white">Participant 4</h4>
-                <span className="text-[10px] text-emerald-400 font-semibold block">Connected</span>
-              </div>
-              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-black/60 text-xs font-semibold text-white">
-                Partner 3
-              </div>
-            </div>
+          {/* Tile 4: Partner 3 (Real 4th Participant Live Stream with Audio & Video) */}
+          {totalTiles >= 4 && (
+            <RemoteParticipantTile
+              stream={remoteList[2]?.stream}
+              peerLabel="Participant 4"
+              badgeLabel="Partner 3"
+              badgeColor="bg-purple-400"
+              fitMode={videoFit}
+            />
           )}
         </div>
 

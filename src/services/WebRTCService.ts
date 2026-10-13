@@ -21,6 +21,8 @@ export interface RoomChatMessage {
 
 export interface WebRTCCallback {
   onRemoteStream: (stream: MediaStream) => void;
+  onPeerStream?: (peerId: string, stream: MediaStream) => void;
+  onPeerLeave?: (peerId: string) => void;
   onConnectionStateChange: (state: RTCIceConnectionState | RTCPeerConnectionState) => void;
   onMessage?: (message: RoomChatMessage) => void;
   onLiveCaption?: (caption: { senderId: string; letter: string; text: string }) => void;
@@ -42,7 +44,18 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
+interface MeshPeer {
+  peerId: string;
+  pc: RTCPeerConnection;
+  stream: MediaStream;
+  queuedCandidates: RTCIceCandidateInit[];
+  processedCandidates: Set<string>;
+  hasOffered?: boolean;
+  hasAnswered?: boolean;
+}
+
 export class WebRTCService {
+  private meshPeers: Map<string, MeshPeer> = new Map();
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
@@ -50,15 +63,11 @@ export class WebRTCService {
   private unsubscribers: (() => void)[] = [];
   private currentRoomId: string | null = null;
   private clientId: string = `peer_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`;
-  private queuedCandidates: RTCIceCandidateInit[] = [];
-  private processedCandidates: Set<string> = new Set();
-  private myLocalCandidates: RTCIceCandidateInit[] = [];
   private fastApiPollTimer: number | null = null;
   private lastFastApiSignalTime: number = 0;
-  private hasAnswered: boolean = false;
-  private hasOffered: boolean = false;
   private callbacks: WebRTCCallback | null = null;
   private isCleanedUp: boolean = false;
+  private initializedPairs: Set<string> = new Set();
 
   private isFastApiAvailable: boolean = false;
   private hasCheckedFastApi: boolean = false;
@@ -71,7 +80,6 @@ export class WebRTCService {
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
     const isLanIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
 
-    // If hosted on a public domain (like Vercel), never try to query localhost HTTP
     if (!isLocal && !isLanIp) {
       if (custom && !custom.includes('localhost') && !custom.includes('127.0.0.1')) {
         return custom;
@@ -103,16 +111,126 @@ export class WebRTCService {
       this.isFastApiAvailable = true;
       this.hasCheckedFastApi = true;
     } catch {
-      // Server is offline, stop further attempts
       this.isFastApiAvailable = false;
       this.hasCheckedFastApi = true;
     }
   }
 
   /**
+   * Creates or retrieves a dedicated RTCPeerConnection for a remote peer in the mesh.
+   */
+  private getOrCreatePeer(remoteId: string): MeshPeer {
+    let peer = this.meshPeers.get(remoteId);
+    if (peer) return peer;
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const stream = new MediaStream();
+
+    peer = {
+      peerId: remoteId,
+      pc,
+      stream,
+      queuedCandidates: [],
+      processedCandidates: new Set(),
+    };
+    this.meshPeers.set(remoteId, peer);
+
+    if (!this.peerConnection) {
+      this.peerConnection = pc;
+    }
+
+    // Add local tracks to this peer connection
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => {
+        try {
+          pc.addTrack(track, this.localStream!);
+        } catch (e) {
+          console.warn(`[WebRTC mesh] addTrack to peer ${remoteId} warning:`, e);
+        }
+      });
+    }
+
+    // Handle remote tracks from this peer
+    pc.ontrack = (event) => {
+      let remoteStr = peer!.stream;
+      if (event.streams && event.streams[0]) {
+        remoteStr = event.streams[0];
+        peer!.stream = remoteStr;
+      } else {
+        remoteStr.addTrack(event.track);
+      }
+      this.remoteStream = remoteStr;
+      this.callbacks?.onRemoteStream?.(remoteStr);
+      this.callbacks?.onPeerStream?.(remoteId, remoteStr);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      this.callbacks?.onConnectionStateChange?.(pc.iceConnectionState);
+    };
+
+    pc.onconnectionstatechange = () => {
+      this.callbacks?.onConnectionStateChange?.(pc.connectionState);
+    };
+
+    const pairKey = [this.clientId, remoteId].sort().join('_to_');
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate || !this.currentRoomId) return;
+      const candidateJson = event.candidate.toJSON();
+
+      // 1. BroadcastChannel (local sync)
+      try {
+        this.broadcastChannel?.postMessage({
+          type: 'mesh-candidate',
+          from: this.clientId,
+          to: remoteId,
+          candidate: candidateJson,
+        });
+      } catch {}
+
+      // 2. Firebase RTDB
+      if (rtdb) {
+        try {
+          const candRef = push(ref(rtdb, `rooms/${this.currentRoomId}/mesh/${pairKey}/candidates/${this.clientId}`));
+          set(candRef, candidateJson).catch(() => {});
+        } catch {}
+      }
+    };
+
+    return peer;
+  }
+
+  private async addOrQueuePeerCandidate(peer: MeshPeer, candidate: RTCIceCandidateInit) {
+    if (!candidate || !candidate.candidate) return;
+    const candKey = `${candidate.candidate}_${candidate.sdpMid}_${candidate.sdpMLineIndex}`;
+    if (peer.processedCandidates.has(candKey)) return;
+    peer.processedCandidates.add(candKey);
+
+    if (peer.pc.remoteDescription && peer.pc.remoteDescription.type) {
+      try {
+        await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn(`[WebRTC mesh] addIceCandidate for ${peer.peerId} error:`, err);
+      }
+    } else {
+      peer.queuedCandidates.push(candidate);
+    }
+  }
+
+  private async flushPeerCandidates(peer: MeshPeer) {
+    while (peer.queuedCandidates.length > 0) {
+      const c = peer.queuedCandidates.shift();
+      if (c) {
+        try {
+          await peer.pc.addIceCandidate(new RTCIceCandidate(c));
+        } catch {}
+      }
+    }
+  }
+
+  /**
    * Initializes real WebRTC peer connection using Firebase Realtime Database
-   * as the primary ultra-low-latency signaling engine, with seamless
-   * BroadcastChannel local tab sync.
+   * as the primary multi-user signaling mesh, with BroadcastChannel local tab sync.
    */
   public async initCall(
     roomId: string,
@@ -125,216 +243,93 @@ export class WebRTCService {
     this.localStream = localStream;
     this.remoteStream = new MediaStream();
     this.callbacks = callbacks;
-    this.hasAnswered = false;
-    this.hasOffered = false;
-    this.queuedCandidates = [];
-    this.processedCandidates.clear();
 
-    // 1. Create Peer Connection
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    this.peerConnection = pc;
+    // 1. Setup Local BroadcastChannel for instant local multi-tab mesh signaling
+    this.setupBroadcastSignaling(this.currentRoomId);
 
-    // 2. Add local audio/video tracks
-    localStream.getTracks().forEach((track) => {
-      try {
-        pc.addTrack(track, localStream);
-      } catch (e) {
-        console.warn('[WebRTC] addTrack warning:', e);
-      }
-    });
+    // 2. Setup Local FastAPI signaling hub
+    this.setupFastApiSignaling(this.currentRoomId);
 
-    // 3. Handle incoming remote tracks
-    pc.ontrack = (event) => {
-      let stream: MediaStream;
-      if (event.streams && event.streams[0]) {
-        stream = event.streams[0];
-      } else {
-        if (!this.remoteStream) {
-          this.remoteStream = new MediaStream();
-        }
-        this.remoteStream.addTrack(event.track);
-        stream = this.remoteStream;
-      }
-      this.remoteStream = stream;
-      callbacks.onRemoteStream(stream);
-    };
-
-    // 4. Connection State monitors
-    pc.oniceconnectionstatechange = () => {
-      callbacks.onConnectionStateChange(pc.iceConnectionState);
-    };
-
-    pc.onconnectionstatechange = () => {
-      callbacks.onConnectionStateChange(pc.connectionState);
-    };
-
-    // 5. ICE candidate generator
-    pc.onicecandidate = (event) => {
-      if (!event.candidate || !this.currentRoomId) return;
-      const candidateJson = event.candidate.toJSON();
-      this.myLocalCandidates.push(candidateJson);
-
-      // (a) BroadcastChannel (zero-latency local tab connection)
-      try {
-        this.broadcastChannel?.postMessage({
-          type: 'ice-candidate',
-          senderId: this.clientId,
-          candidate: candidateJson,
-        });
-      } catch {
-        // ignore
-      }
-
-      // (b) Firebase Realtime Database candidate store
-      if (rtdb) {
-        try {
-          const candRef = push(ref(rtdb, `rooms/${this.currentRoomId}/candidates/${this.clientId}`));
-          set(candRef, candidateJson).catch(() => {});
-        } catch {
-          // graceful fallback
-        }
-      }
-
-      // (c) Local FastAPI Signaling Hub (LAN & Offline fallback)
-      this.postFastApiSignal('candidate', candidateJson);
-    };
-
-    // 6. Setup Local BroadcastChannel Signaling with greeting handshake
-    this.setupBroadcastSignaling(this.currentRoomId, pc);
-
-    // 7. Setup Local FastAPI WebRTC Signaling Hub (cross-device LAN coordination)
-    this.setupFastApiSignaling(this.currentRoomId, pc);
-
-    // 8. Setup Firebase Realtime Database Signaling
-    await this.setupRealtimeDatabaseSignaling(this.currentRoomId, pc);
-
-    // Safety fallback: if after 1.8s no offer exists, initiate one
-    window.setTimeout(() => {
-      if (!this.isCleanedUp && this.peerConnection === pc && !this.hasOffered && !this.hasAnswered) {
-        this.initiateOffer(pc);
-      }
-    }, 1800);
+    // 3. Setup Firebase Realtime Database multi-peer mesh signaling
+    await this.setupRealtimeDatabaseSignaling(this.currentRoomId);
   }
 
   /**
-   * Safely adds or queues an ICE candidate depending on signaling state.
+   * Layer 1: BroadcastChannel Signaling (instant for multi-tab mesh testing)
    */
-  private async addOrQueueCandidate(pc: RTCPeerConnection, candidate: RTCIceCandidateInit) {
-    if (!candidate || !candidate.candidate) return;
-
-    const candKey = `${candidate.candidate}_${candidate.sdpMid}_${candidate.sdpMLineIndex}`;
-    if (this.processedCandidates.has(candKey)) return;
-    this.processedCandidates.add(candKey);
-
-    if (pc.remoteDescription && pc.remoteDescription.type) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.warn('[WebRTC] addIceCandidate caught:', err);
-      }
-    } else {
-      this.queuedCandidates.push(candidate);
-    }
-  }
-
-  /**
-   * Flushes queued candidates once remote description is set.
-   */
-  private async flushQueuedCandidates(pc: RTCPeerConnection) {
-    while (this.queuedCandidates.length > 0) {
-      const c = this.queuedCandidates.shift();
-      if (c) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(c));
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
-
-  /**
-   * Layer 1: BroadcastChannel Signaling (instant for tabs/windows on the same computer)
-   */
-  private setupBroadcastSignaling(roomId: string, pc: RTCPeerConnection) {
+  private setupBroadcastSignaling(roomId: string) {
     try {
       const channel = new BroadcastChannel(`signmate_room_${roomId}`);
       this.broadcastChannel = channel;
 
       channel.onmessage = async (event) => {
         const data = event.data;
-        if (!data || data.senderId === this.clientId) return;
+        if (!data || data.senderId === this.clientId || data.from === this.clientId) return;
 
         try {
           if (data.type === 'peer-join') {
-            // Re-announce offer to newly joined peer
-            if (pc.localDescription && pc.localDescription.type === 'offer') {
-              channel.postMessage({
-                type: 'offer',
-                senderId: this.clientId,
-                offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
-              });
-            }
-            // Send all gathered ICE candidates
-            this.myLocalCandidates.forEach((cand) => {
-              channel.postMessage({
-                type: 'ice-candidate',
-                senderId: this.clientId,
-                candidate: cand,
-              });
-            });
-          } else if (data.type === 'offer' && !this.hasAnswered && pc.signalingState === 'stable') {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            await this.flushQueuedCandidates(pc);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            this.hasAnswered = true;
+            // Re-announce presence
             channel.postMessage({
-              type: 'answer',
+              type: 'peer-announce',
               senderId: this.clientId,
-              answer: { type: answer.type, sdp: answer.sdp },
             });
-
-            // Re-send our gathered candidates to callee
-            this.myLocalCandidates.forEach((cand) => {
-              channel.postMessage({
-                type: 'ice-candidate',
-                senderId: this.clientId,
-                candidate: cand,
-              });
-            });
-
-            // Mirror answer to RTDB
-            if (rtdb && this.currentRoomId) {
-              set(ref(rtdb, `rooms/${this.currentRoomId}/answer`), {
-                sdpInit: { type: answer.type, sdp: answer.sdp },
-                senderId: this.clientId,
-                timestamp: Date.now(),
-              }).catch(() => {});
+          } else if (data.type === 'peer-announce') {
+            const remoteId = data.senderId;
+            if (remoteId && remoteId !== this.clientId) {
+              const isInitiator = this.clientId < remoteId;
+              if (isInitiator) {
+                const peer = this.getOrCreatePeer(remoteId);
+                if (!peer.hasOffered && peer.pc.signalingState === 'stable') {
+                  peer.hasOffered = true;
+                  const offer = await peer.pc.createOffer();
+                  await peer.pc.setLocalDescription(offer);
+                  channel.postMessage({
+                    type: 'mesh-offer',
+                    from: this.clientId,
+                    to: remoteId,
+                    offer,
+                  });
+                }
+              }
             }
-
-            // Mirror answer to FastAPI
-            this.postFastApiSignal('answer', { type: answer.type, sdp: answer.sdp });
-          } else if (data.type === 'answer' && pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-            await this.flushQueuedCandidates(pc);
-          } else if (data.type === 'ice-candidate' && data.candidate) {
-            await this.addOrQueueCandidate(pc, data.candidate);
-          } else if (data.type === 'chat-message' && data.message) {
+          } else if (data.type === 'mesh-offer' && data.to === this.clientId) {
+            const remoteId = data.from;
+            const peer = this.getOrCreatePeer(remoteId);
+            if (!peer.hasAnswered && peer.pc.signalingState === 'stable') {
+              peer.hasAnswered = true;
+              await peer.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+              await this.flushPeerCandidates(peer);
+              const answer = await peer.pc.createAnswer();
+              await peer.pc.setLocalDescription(answer);
+              channel.postMessage({
+                type: 'mesh-answer',
+                from: this.clientId,
+                to: remoteId,
+                answer,
+              });
+            }
+          } else if (data.type === 'mesh-answer' && data.to === this.clientId) {
+            const remoteId = data.from;
+            const peer = this.getOrCreatePeer(remoteId);
+            if (peer.pc.signalingState === 'have-local-offer') {
+              await peer.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+              await this.flushPeerCandidates(peer);
+            }
+          } else if (data.type === 'mesh-candidate' && data.to === this.clientId) {
+            const remoteId = data.from;
+            const peer = this.getOrCreatePeer(remoteId);
+            await this.addOrQueuePeerCandidate(peer, data.candidate);
+          } else if (data.type === 'chat-message') {
             this.callbacks?.onMessage?.(data.message);
-          } else if (data.type === 'live-caption' && data.senderId !== this.clientId) {
-            this.callbacks?.onLiveCaption?.({
-              senderId: data.senderId,
-              letter: data.letter || '',
-              text: data.text || '',
-            });
+          } else if (data.type === 'live-caption') {
+            this.callbacks?.onLiveCaption?.(data);
           }
         } catch (err) {
-          console.warn('[WebRTC BroadcastChannel Error]', err);
+          console.warn('[BroadcastChannel mesh error]:', err);
         }
       };
 
-      // Announce arrival to any peers already present in the room
+      // Announce arrival to other open tabs
       channel.postMessage({
         type: 'peer-join',
         senderId: this.clientId,
@@ -345,9 +340,9 @@ export class WebRTCService {
   }
 
   /**
-   * Layer 2: FastAPI WebRTC Signaling Hub (Guaranteed fallback across devices on local network)
+   * Layer 2: FastAPI WebRTC Signaling Hub (LAN fallback)
    */
-  private setupFastApiSignaling(roomId: string, pc: RTCPeerConnection) {
+  private setupFastApiSignaling(roomId: string) {
     const baseUrl = this.getFastApiUrl();
     if (!baseUrl) return;
 
@@ -355,8 +350,7 @@ export class WebRTCService {
     let failCount = 0;
 
     const poll = async () => {
-      if (this.isCleanedUp || this.peerConnection !== pc) return;
-      // Exponential backoff: if server offline, only retry every 8 seconds
+      if (this.isCleanedUp) return;
       if (failCount >= 3 && Date.now() % 8000 > 1200) return;
 
       try {
@@ -376,18 +370,21 @@ export class WebRTCService {
               }
               if (sig.sender_id === this.clientId) continue;
 
-              if (sig.signal_type === 'offer' && !this.hasAnswered && pc.signalingState === 'stable') {
-                await pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
-                await this.flushQueuedCandidates(pc);
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                this.hasAnswered = true;
+              const remoteId = sig.sender_id;
+              const peer = this.getOrCreatePeer(remoteId);
+
+              if (sig.signal_type === 'offer' && !peer.hasAnswered && peer.pc.signalingState === 'stable') {
+                peer.hasAnswered = true;
+                await peer.pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
+                await this.flushPeerCandidates(peer);
+                const answer = await peer.pc.createAnswer();
+                await peer.pc.setLocalDescription(answer);
                 this.postFastApiSignal('answer', { type: answer.type, sdp: answer.sdp });
-              } else if (sig.signal_type === 'answer' && pc.signalingState === 'have-local-offer') {
-                await pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
-                await this.flushQueuedCandidates(pc);
+              } else if (sig.signal_type === 'answer' && peer.pc.signalingState === 'have-local-offer') {
+                await peer.pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
+                await this.flushPeerCandidates(peer);
               } else if (sig.signal_type === 'candidate' && sig.payload) {
-                await this.addOrQueueCandidate(pc, sig.payload);
+                await this.addOrQueuePeerCandidate(peer, sig.payload);
               }
             }
           }
@@ -412,17 +409,16 @@ export class WebRTCService {
   }
 
   /**
-   * Layer 2: Firebase Realtime Database Signaling (real-time global peer connections)
+   * Layer 3: Firebase Realtime Database Full-Mesh Signaling (Up to 4 participants)
    */
-  private async setupRealtimeDatabaseSignaling(roomId: string, pc: RTCPeerConnection) {
+  private async setupRealtimeDatabaseSignaling(roomId: string) {
     const db = rtdb;
     if (!db) {
-      console.warn('[WebRTC] Firebase Realtime Database is not configured. Falling back to local signaling.');
+      console.warn('[WebRTC] Firebase Realtime Database is not configured.');
       this.callbacks?.onSignalingStatus?.({
         rtdbConnected: false,
         error: 'Realtime Database instance not found.',
       });
-      this.initiateOffer(pc);
       return;
     }
 
@@ -430,9 +426,6 @@ export class WebRTCService {
       const roomPath = `rooms/${roomId}`;
       const myPeerRef = ref(db, `${roomPath}/peers/${this.clientId}`);
       const peersRef = ref(db, `${roomPath}/peers`);
-      const offerRef = ref(db, `${roomPath}/offer`);
-      const answerRef = ref(db, `${roomPath}/answer`);
-      const candidatesRef = ref(db, `${roomPath}/candidates`);
       const messagesRef = ref(db, `${roomPath}/messages`);
 
       // 1. Fetch current peers in this room
@@ -440,18 +433,18 @@ export class WebRTCService {
       const existingPeers = peersSnapshot && peersSnapshot.exists() ? peersSnapshot.val() : {};
       const activePeerIds = Object.keys(existingPeers).filter((id) => id !== this.clientId);
 
-      // Enforce room maximum capacity (maximum 4 participants)
+      // Max 4 participants
       if (activePeerIds.length >= 4) {
         console.warn(`[WebRTC] Room ${roomId} is full (max 4 participants).`);
         this.callbacks?.onRoomFull?.();
         return;
       }
 
-      // If room was empty, purge any stale offers/answers/candidates from abandoned sessions
+      // Purge stale data if room was empty
       if (activePeerIds.length === 0) {
-        await remove(offerRef).catch(() => {});
-        await remove(answerRef).catch(() => {});
-        await remove(candidatesRef).catch(() => {});
+        await remove(ref(db, `${roomPath}/mesh`)).catch(() => {});
+        await remove(ref(db, `${roomPath}/offer`)).catch(() => {});
+        await remove(ref(db, `${roomPath}/answer`)).catch(() => {});
       }
 
       // 2. Register local peer presence with onDisconnect auto-removal
@@ -460,67 +453,140 @@ export class WebRTCService {
         joinedAt: Date.now(),
       }).catch((err) => {
         console.warn('[WebRTC RTDB] Peer presence registration failed:', err);
-        this.callbacks?.onSignalingStatus?.({
-          rtdbConnected: false,
-          error: err.message,
-        });
       });
 
       try {
         onDisconnect(myPeerRef).remove();
-        onDisconnect(ref(db, `${roomPath}/candidates/${this.clientId}`)).remove();
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       this.callbacks?.onSignalingStatus?.({ rtdbConnected: true });
 
-      // 3. Track peer count changes and auto-renegotiate if new peer arrives
+      // 3. Listen for peers joining/leaving & automatically manage mesh connections
       const unsubPeers = onValue(
         peersRef,
         async (snapshot) => {
+          if (this.isCleanedUp) return;
           const peers = snapshot.val() || {};
           const peerList = Object.keys(peers);
-          const count = peerList.length;
-          this.callbacks?.onPeerCountChange?.(count);
+          this.callbacks?.onPeerCountChange?.(peerList.length);
 
-          // If a new peer arrived and we are the earlier peer (host) and not yet connected:
-          if (
-            count > 1 &&
-            !this.hasAnswered &&
-            pc.iceConnectionState !== 'connected' &&
-            pc.connectionState !== 'connected'
-          ) {
-            // Find earliest peer
-            const sortedPeers = Object.values(peers as Record<string, { id: string; joinedAt?: number }>).sort(
-              (a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)
-            );
-            if (sortedPeers.length > 0 && sortedPeers[0].id === this.clientId) {
-              // We are the host / caller: ensure an active offer is published
-              const currentOffer = await get(offerRef).catch(() => null);
-              const offData = currentOffer && currentOffer.exists() ? currentOffer.val() : null;
-              if (!offData || offData.senderId !== this.clientId || Date.now() - (offData.timestamp || 0) > 30000) {
+          // Remove any peers that left
+          for (const [existingId, peerEntry] of Array.from(this.meshPeers.entries())) {
+            if (!peers[existingId]) {
+              try {
+                peerEntry.pc.close();
+              } catch {}
+              this.meshPeers.delete(existingId);
+              const pairKey = [this.clientId, existingId].sort().join('_to_');
+              this.initializedPairs.delete(pairKey);
+              this.callbacks?.onPeerLeave?.(existingId);
+            }
+          }
+
+          // Connect to all other peers
+          for (const remoteId of peerList) {
+            if (remoteId === this.clientId) continue;
+
+            const pairKey = [this.clientId, remoteId].sort().join('_to_');
+            if (this.initializedPairs.has(pairKey)) continue;
+            this.initializedPairs.add(pairKey);
+
+            const isInitiator = this.clientId < remoteId;
+
+            if (isInitiator) {
+              const peer = this.getOrCreatePeer(remoteId);
+              if (!peer.hasOffered && peer.pc.signalingState === 'stable') {
                 try {
-                  if (pc.signalingState === 'stable') {
-                    const freshOffer = await pc.createOffer();
-                    await pc.setLocalDescription(freshOffer);
-                    this.hasOffered = true;
-                    await set(offerRef, {
-                      sdpInit: { type: freshOffer.type, sdp: freshOffer.sdp },
-                      senderId: this.clientId,
-                      timestamp: Date.now(),
-                    });
-                    this.broadcastChannel?.postMessage({
-                      type: 'offer',
-                      senderId: this.clientId,
-                      offer: freshOffer,
-                    });
-                  }
-                } catch (renegErr) {
-                  console.warn('[WebRTC RTDB] Renegotiation offer caught:', renegErr);
+                  peer.hasOffered = true;
+                  const offer = await peer.pc.createOffer();
+                  await peer.pc.setLocalDescription(offer);
+
+                  // Send to RTDB mesh
+                  const offerRef = ref(db, `${roomPath}/mesh/${pairKey}/offer`);
+                  await set(offerRef, {
+                    sdpInit: { type: offer.type, sdp: offer.sdp },
+                    senderId: this.clientId,
+                    timestamp: Date.now(),
+                  });
+                  onDisconnect(offerRef).remove();
+
+                  // BroadcastChannel sync
+                  this.broadcastChannel?.postMessage({
+                    type: 'mesh-offer',
+                    from: this.clientId,
+                    to: remoteId,
+                    offer,
+                  });
+                } catch (err) {
+                  console.warn(`[WebRTC mesh] Offer generation to ${remoteId} failed:`, err);
                 }
               }
+
+              // Listen for answer from remoteId
+              const answerRef = ref(db, `${roomPath}/mesh/${pairKey}/answer`);
+              const unsubAns = onValue(answerRef, async (ansSnap) => {
+                const ansData = ansSnap.val();
+                if (ansData && ansData.senderId === remoteId && ansData.sdpInit) {
+                  if (peer.pc.signalingState === 'have-local-offer') {
+                    try {
+                      await peer.pc.setRemoteDescription(new RTCSessionDescription(ansData.sdpInit));
+                      await this.flushPeerCandidates(peer);
+                    } catch (err) {
+                      console.warn(`[WebRTC mesh] Set answer from ${remoteId} failed:`, err);
+                    }
+                  }
+                }
+              });
+              this.unsubscribers.push(unsubAns);
+            } else {
+              // Callee: listen for offer from remoteId
+              const offerRef = ref(db, `${roomPath}/mesh/${pairKey}/offer`);
+              const unsubOff = onValue(offerRef, async (offSnap) => {
+                const offData = offSnap.val();
+                if (offData && offData.senderId === remoteId && offData.sdpInit) {
+                  const peer = this.getOrCreatePeer(remoteId);
+                  if (!peer.hasAnswered && peer.pc.signalingState === 'stable') {
+                    try {
+                      peer.hasAnswered = true;
+                      await peer.pc.setRemoteDescription(new RTCSessionDescription(offData.sdpInit));
+                      await this.flushPeerCandidates(peer);
+
+                      const answer = await peer.pc.createAnswer();
+                      await peer.pc.setLocalDescription(answer);
+
+                      const answerRef = ref(db, `${roomPath}/mesh/${pairKey}/answer`);
+                      await set(answerRef, {
+                        sdpInit: { type: answer.type, sdp: answer.sdp },
+                        senderId: this.clientId,
+                        timestamp: Date.now(),
+                      });
+                      onDisconnect(answerRef).remove();
+
+                      this.broadcastChannel?.postMessage({
+                        type: 'mesh-answer',
+                        from: this.clientId,
+                        to: remoteId,
+                        answer,
+                      });
+                    } catch (err) {
+                      console.warn(`[WebRTC mesh] Answer generation for ${remoteId} failed:`, err);
+                    }
+                  }
+                }
+              });
+              this.unsubscribers.push(unsubOff);
             }
+
+            // Listen for candidates from remoteId
+            const remoteCandRef = ref(db, `${roomPath}/mesh/${pairKey}/candidates/${remoteId}`);
+            const unsubCand = onChildAdded(remoteCandRef, (cSnap) => {
+              const cand = cSnap.val();
+              if (cand) {
+                const peer = this.getOrCreatePeer(remoteId);
+                this.addOrQueuePeerCandidate(peer, cand);
+              }
+            });
+            this.unsubscribers.push(unsubCand);
           }
         },
         (err) => {
@@ -533,7 +599,7 @@ export class WebRTCService {
       );
       this.unsubscribers.push(unsubPeers);
 
-      // 4. Listen to synchronized chat/sign/voice messages
+      // 4. Listen to synchronized chat messages
       const unsubMessages = onChildAdded(
         messagesRef,
         (snapshot) => {
@@ -548,7 +614,7 @@ export class WebRTCService {
       );
       this.unsubscribers.push(unsubMessages);
 
-      // 4b. Listen to live real-time sign caption stream from partner
+      // 5. Listen to live partner caption stream
       const liveCaptionRef = ref(db, `${roomPath}/liveCaption`);
       const unsubLiveCaption = onValue(liveCaptionRef, (snapshot) => {
         const cap = snapshot.val();
@@ -561,180 +627,6 @@ export class WebRTCService {
         }
       });
       this.unsubscribers.push(unsubLiveCaption);
-
-      // 5. Check existing offer in Realtime Database
-      const offerSnapshot = await get(offerRef).catch(() => null);
-      const offerData = offerSnapshot && offerSnapshot.exists() ? offerSnapshot.val() : null;
-
-      const isOfferFromActivePeer =
-        offerData &&
-        activePeerIds.includes(offerData.senderId) &&
-        offerData.sdpInit &&
-        Date.now() - (offerData.timestamp || 0) < 180000;
-
-      if (isOfferFromActivePeer && pc.signalingState === 'stable') {
-        // === CALLEE ROLE: Answer the active host's offer ===
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdpInit));
-          await this.flushQueuedCandidates(pc);
-
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.hasAnswered = true;
-
-          await set(answerRef, {
-            sdpInit: { type: answer.type, sdp: answer.sdp },
-            senderId: this.clientId,
-            timestamp: Date.now(),
-          });
-
-          try {
-            onDisconnect(answerRef).remove();
-          } catch {
-            // ignore
-          }
-
-          // Broadcast answer locally
-          this.broadcastChannel?.postMessage({
-            type: 'answer',
-            senderId: this.clientId,
-            answer,
-          });
-        } catch (err) {
-          console.warn('[WebRTC RTDB] Failed to answer offer:', err);
-        }
-      } else {
-        // === CALLER ROLE: Create initial offer ===
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        this.hasOffered = true;
-
-        await set(offerRef, {
-          sdpInit: { type: offer.type, sdp: offer.sdp },
-          senderId: this.clientId,
-          timestamp: Date.now(),
-        }).catch((err) => {
-          console.warn('[WebRTC RTDB] Offer set error:', err);
-        });
-
-        try {
-          onDisconnect(offerRef).remove();
-        } catch {
-          // ignore
-        }
-
-        // Broadcast offer locally
-        this.broadcastChannel?.postMessage({
-          type: 'offer',
-          senderId: this.clientId,
-          offer,
-        });
-
-        // Mirror offer to FastAPI if available
-        this.postFastApiSignal('offer', { type: offer.type, sdp: offer.sdp });
-
-        // Listen for callee answer in RTDB
-        const unsubAnswer = onValue(
-          answerRef,
-          async (snapshot) => {
-            const ansData = snapshot.val();
-            if (ansData && ansData.senderId !== this.clientId && ansData.sdpInit) {
-              if (pc.signalingState === 'have-local-offer') {
-                try {
-                  await pc.setRemoteDescription(new RTCSessionDescription(ansData.sdpInit));
-                  await this.flushQueuedCandidates(pc);
-                } catch (err) {
-                  console.warn('[WebRTC RTDB] Set remote answer error:', err);
-                }
-              }
-            }
-          },
-          (err) => {
-            console.warn('[WebRTC RTDB] answerRef listener error:', err);
-          }
-        );
-        this.unsubscribers.push(unsubAnswer);
-      }
-
-      // 6. Watch for incoming offers (if second peer arrives and publishes offer)
-      const unsubOffer = onValue(
-        offerRef,
-        async (snapshot) => {
-          const off = snapshot.val();
-          if (!off || off.senderId === this.clientId || !off.sdpInit) return;
-          if (this.hasAnswered || pc.signalingState !== 'stable') return;
-
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(off.sdpInit));
-            await this.flushQueuedCandidates(pc);
-
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            this.hasAnswered = true;
-
-            await set(answerRef, {
-              sdpInit: { type: answer.type, sdp: answer.sdp },
-              senderId: this.clientId,
-              timestamp: Date.now(),
-            });
-
-            this.broadcastChannel?.postMessage({
-              type: 'answer',
-              senderId: this.clientId,
-              answer,
-            });
-          } catch (err) {
-            console.warn('[WebRTC RTDB] Dynamic offer set error:', err);
-          }
-        },
-        (err) => {
-          console.warn('[WebRTC RTDB] offerRef listener error:', err);
-        }
-      );
-      this.unsubscribers.push(unsubOffer);
-
-      // 7. Catch-up with any existing candidates already published in RTDB
-      const initialCandsSnapshot = await get(candidatesRef).catch(() => null);
-      if (initialCandsSnapshot && initialCandsSnapshot.exists()) {
-        const candsMap = initialCandsSnapshot.val();
-        for (const [peerId, list] of Object.entries(candsMap)) {
-          if (peerId !== this.clientId && list && typeof list === 'object') {
-            for (const candItem of Object.values(list as Record<string, RTCIceCandidateInit>)) {
-              if (candItem) {
-                this.addOrQueueCandidate(pc, candItem);
-              }
-            }
-          }
-        }
-      }
-
-      // 8. Stream incoming ICE candidates in real-time across peers in RTDB
-      const unsubCandidatesGroup = onChildAdded(
-        candidatesRef,
-        (peerCandSnapshot) => {
-          const peerId = peerCandSnapshot.key;
-          if (!peerId || peerId === this.clientId) return;
-
-          const peerCandRef = ref(db, `${roomPath}/candidates/${peerId}`);
-          const unsubPeerCands = onChildAdded(
-            peerCandRef,
-            (cSnap) => {
-              const c = cSnap.val();
-              if (c) {
-                this.addOrQueueCandidate(pc, c);
-              }
-            },
-            (err) => {
-              console.warn('[WebRTC RTDB] peerCandRef error:', err);
-            }
-          );
-          this.unsubscribers.push(unsubPeerCands);
-        },
-        (err) => {
-          console.warn('[WebRTC RTDB] candidatesRef error:', err);
-        }
-      );
-      this.unsubscribers.push(unsubCandidatesGroup);
     } catch (err: unknown) {
       const errorObj = err as Error;
       console.warn('[WebRTC Realtime Database Signaling exception]', errorObj);
@@ -742,35 +634,6 @@ export class WebRTCService {
         rtdbConnected: false,
         error: errorObj.message,
       });
-      this.initiateOffer(pc);
-    }
-  }
-
-  private async initiateOffer(pc: RTCPeerConnection) {
-    if (pc.signalingState === 'stable' && !this.hasOffered && !this.hasAnswered) {
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        this.hasOffered = true;
-        this.broadcastChannel?.postMessage({
-          type: 'offer',
-          senderId: this.clientId,
-          offer,
-        });
-
-        if (rtdb && this.currentRoomId) {
-          set(ref(rtdb, `rooms/${this.currentRoomId}/offer`), {
-            sdpInit: { type: offer.type, sdp: offer.sdp },
-            senderId: this.clientId,
-            timestamp: Date.now(),
-          }).catch(() => {});
-        }
-
-        // Mirror offer to FastAPI
-        this.postFastApiSignal('offer', { type: offer.type, sdp: offer.sdp });
-      } catch (e) {
-        console.warn('[initiateOffer error]', e);
-      }
     }
   }
 
@@ -793,17 +656,15 @@ export class WebRTCService {
       type,
     };
 
-    // 1. Local BroadcastChannel
+    // 1. BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({
         type: 'chat-message',
         message: msg,
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 2. Firebase Realtime Database
+    // 2. Firebase RTDB
     if (rtdb) {
       try {
         const msgRef = push(ref(rtdb, `rooms/${this.currentRoomId}/messages`));
@@ -820,7 +681,7 @@ export class WebRTCService {
   public async sendLiveCaption(letter: string, text: string): Promise<void> {
     if (!this.currentRoomId) return;
 
-    // 1. Local BroadcastChannel for instant local multi-tab sync
+    // 1. BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({
         type: 'live-caption',
@@ -828,11 +689,9 @@ export class WebRTCService {
         letter,
         text,
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 2. Firebase Realtime Database
+    // 2. Firebase RTDB
     if (rtdb) {
       try {
         const liveRef = ref(rtdb, `rooms/${this.currentRoomId}/liveCaption`);
@@ -842,9 +701,7 @@ export class WebRTCService {
           text,
           timestamp: Date.now(),
         });
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   }
 
@@ -863,9 +720,7 @@ export class WebRTCService {
     this.unsubscribers.forEach((u) => {
       try {
         u();
-      } catch {
-        // ignore
-      }
+      } catch {}
     });
     this.unsubscribers = [];
 
@@ -874,37 +729,35 @@ export class WebRTCService {
       try {
         const myPeerRef = ref(rtdb, `rooms/${this.currentRoomId}/peers/${this.clientId}`);
         remove(myPeerRef).catch(() => {});
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     if (this.broadcastChannel) {
       try {
         this.broadcastChannel.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.broadcastChannel = null;
     }
+
+    // Close all mesh connections
+    this.meshPeers.forEach((peer) => {
+      try {
+        peer.pc.close();
+      } catch {}
+    });
+    this.meshPeers.clear();
+    this.initializedPairs.clear();
 
     if (this.peerConnection) {
       try {
         this.peerConnection.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       this.peerConnection = null;
     }
 
     this.localStream = null;
     this.remoteStream = null;
     this.currentRoomId = null;
-    this.hasAnswered = false;
-    this.hasOffered = false;
-    this.queuedCandidates = [];
-    this.myLocalCandidates = [];
-    this.processedCandidates.clear();
     this.callbacks = null;
   }
 
