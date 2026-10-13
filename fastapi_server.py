@@ -43,6 +43,8 @@ labels_dict: Dict[int, str] = {}
 
 def load_model_and_labels():
     global model, labels_dict
+    if model is not None and len(labels_dict) > 0:
+        return
     # 1. Load Labels
     if os.path.exists(LABELS_PATH):
         with open(LABELS_PATH, "r", encoding="utf-8") as f:
@@ -178,6 +180,8 @@ def fastapi_status():
     }
 
 
+@app.get("/health")
+@app.get("/api/health")
 @app.get("/api/v1/health")
 def health_check():
     return {
