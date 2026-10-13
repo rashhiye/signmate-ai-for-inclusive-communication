@@ -94,8 +94,8 @@ export const RegisterPage: React.FC = () => {
           <div className="flex justify-center">
             <SignMateLogo size="lg" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-surface-100">
-            Create SignMate Account
+          <h1 className="text-xl sm:text-2xl font-bold text-[#F8FAFC]">
+            Create Sign<span className="text-[#38bdf8]">Mate</span> Account
           </h1>
           <p className="text-xs sm:text-sm text-surface-400">
             Sign language-assisted video meetings & real-time translation

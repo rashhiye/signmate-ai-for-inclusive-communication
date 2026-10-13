@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from './Button';
-import { Menu, X, Video, LogOut, LayoutDashboard, LogIn } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, LogIn } from 'lucide-react';
+import { SignMateLogo } from './brand/SignMateLogo';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -25,14 +26,14 @@ export const Navbar: React.FC = () => {
           {/* Brand Logo */}
           <Link
             to="/"
-            className="flex items-center gap-3 group focus-visible:ring-2 focus-visible:ring-[#0284C7] rounded-lg p-1"
+            className="flex items-center gap-2.5 group focus-visible:ring-2 focus-visible:ring-[#0284C7] rounded-lg p-1"
             aria-label="SignMate Home"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#0284C7]/15 border border-[#0284C7]/30 flex items-center justify-center text-[#38bdf8] group-hover:bg-[#0284C7]/25 transition-colors">
-              <Video className="w-4 h-4 text-[#38bdf8]" aria-hidden="true" />
-            </div>
+            <SignMateLogo size="sm" />
             <div className="flex flex-col">
-              <span className="font-bold text-base text-[#F8FAFC] tracking-tight">SignMate</span>
+              <span className="font-bold text-base text-[#F8FAFC] tracking-tight">
+                Sign<span className="text-[#38bdf8]">Mate</span>
+              </span>
               <span className="text-[10px] text-[#94A3B8] leading-none hidden md:block">
                 Assistive Video Platform
               </span>

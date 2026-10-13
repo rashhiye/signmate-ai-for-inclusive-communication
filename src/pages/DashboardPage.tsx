@@ -49,8 +49,8 @@ export const DashboardPage: React.FC = () => {
           <div className="flex justify-center">
             <SignMateLogo size="lg" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-[2px] uppercase text-[#F8FAFC] font-['Montserrat',sans-serif]">
-            SIGNMATE
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight uppercase text-[#F8FAFC]">
+            Sign<span className="text-[#38bdf8]">Mate</span>
           </h1>
           <p className="text-xs text-[#94A3B8] tracking-wider uppercase font-medium">
             Bridging the Gap Through Technology {user?.displayName ? `• Welcome ${user.displayName}` : ''}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Video, ShieldCheck, Activity } from 'lucide-react';
+import { ShieldCheck, Activity } from 'lucide-react';
+import { SignMateLogo } from './brand/SignMateLogo';
 
 export const Footer: React.FC = () => {
   return (
@@ -10,10 +11,10 @@ export const Footer: React.FC = () => {
           {/* Brand Info */}
           <div className="md:col-span-2 space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#0284C7]/15 border border-[#0284C7]/30 flex items-center justify-center text-[#38bdf8]">
-                <Video className="w-4 h-4" aria-hidden="true" />
-              </div>
-              <span className="font-bold text-lg text-[#F8FAFC] tracking-tight">SignMate</span>
+              <SignMateLogo size="sm" />
+              <span className="font-bold text-lg text-[#F8FAFC] tracking-tight">
+                Sign<span className="text-[#38bdf8]">Mate</span>
+              </span>
             </div>
             <p className="text-xs text-[#94A3B8] max-w-sm leading-relaxed">
               Real-time assistive video conferencing platform with on-device machine learning gesture recognition and bidirectional captions.

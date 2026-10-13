@@ -44,8 +44,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
         <div className="flex items-center gap-3">
           <SignMateLogo size="sm" />
           <div>
-            <span className="font-bold text-sm tracking-wide text-white block">SignMate</span>
-            <span className="text-[10px] text-surface-400">User Dashboard</span>
+            <span className="font-bold text-sm tracking-wide text-[#F8FAFC] block">
+              Sign<span className="text-[#38bdf8]">Mate</span>
+            </span>
+            <span className="text-[10px] text-[#94A3B8]">User Dashboard</span>
           </div>
         </div>
         {isMobileView && (

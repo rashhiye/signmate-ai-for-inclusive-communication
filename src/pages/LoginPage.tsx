@@ -84,8 +84,8 @@ export const LoginPage: React.FC = () => {
             <div className="flex justify-center mb-3">
               <SignMateLogo size="lg" />
             </div>
-            <h1 className="font-['Montserrat',sans-serif] font-bold text-2xl tracking-[3px] uppercase text-white drop-shadow-md">
-              SIGNMATE
+            <h1 className="font-sans font-extrabold text-2xl tracking-tight uppercase text-[#F8FAFC]">
+              Sign<span className="text-[#38bdf8]">Mate</span>
             </h1>
             <p className="text-[11px] text-[#a0a0a0] tracking-[2px] uppercase mt-1">
               Bridging the Gap

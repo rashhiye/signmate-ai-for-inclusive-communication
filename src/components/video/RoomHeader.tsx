@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { RoomCodeBadge } from '../../rooms/RoomCodeBadge';
 import { StatusBadge } from '../StatusBadge';
 import { Button } from '../Button';
-import { Video, LogOut, Users } from 'lucide-react';
+import { LogOut, Users } from 'lucide-react';
+import { SignMateLogo } from '../brand/SignMateLogo';
 
 interface RoomHeaderProps {
   roomCode: string;
@@ -21,20 +22,20 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   onLeave,
 }) => {
   return (
-    <header className="w-full bg-surface-900/90 border-b border-surface-800/80 px-4 py-2.5 backdrop-blur-md z-30 shrink-0">
+    <header className="w-full bg-[#1B2436]/90 border-b border-[#1e293b] px-4 py-2.5 backdrop-blur-md z-30 shrink-0 font-sans">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         {/* Left: Branding & Room Info */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
             to="/dashboard"
-            className="flex items-center gap-2 text-surface-200 hover:text-white transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg p-1"
+            className="flex items-center gap-2 text-surface-200 hover:text-white transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-[#0284C7] rounded-lg p-1"
             aria-label="Exit to Dashboard"
             title="Exit to Dashboard"
           >
-            <div className="w-8 h-8 rounded-lg bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400">
-              <Video className="w-4 h-4" aria-hidden="true" />
-            </div>
-            <span className="font-bold text-sm text-surface-100 hidden sm:inline">SignMate</span>
+            <SignMateLogo size="sm" />
+            <span className="font-bold text-sm text-[#F8FAFC] hidden sm:inline">
+              Sign<span className="text-[#38bdf8]">Mate</span>
+            </span>
           </Link>
 
           <div className="h-4 w-px bg-surface-700 hidden sm:block" aria-hidden="true" />
