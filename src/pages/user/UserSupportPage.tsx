@@ -8,8 +8,6 @@ import {
   Send,
   Mail,
   User,
-  CheckCircle,
-  Copy,
   ChevronDown,
   Search,
   Sparkles,
@@ -100,7 +98,6 @@ export const UserSupportPage: React.FC = () => {
     message: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
 
   const SUPPORT_EMAIL = 'rashidkp2004@gmail.com';
 
@@ -116,17 +113,6 @@ export const UserSupportPage: React.FC = () => {
 
   const toggleFaq = (id: string) => {
     setExpandedFaqId((prev) => (prev === id ? null : id));
-  };
-
-  const handleCopyEmail = () => {
-    navigator.clipboard.writeText(SUPPORT_EMAIL);
-    setIsCopied(true);
-    showToast({
-      type: 'success',
-      title: 'Email Copied',
-      message: `${SUPPORT_EMAIL} copied to clipboard!`,
-    });
-    setTimeout(() => setIsCopied(false), 2500);
   };
 
   const handleSubmitFeedback = (e: React.FormEvent) => {
@@ -159,14 +145,14 @@ Local Time: ${new Date().toLocaleString()}
 `
     );
 
-    // Open user's default email client addressed to rashidkp2004@gmail.com
+    // Open user's default email client addressed to support
     const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${emailSubject}&body=${emailBody}`;
     window.location.href = mailtoUrl;
 
     showToast({
       type: 'success',
-      title: 'Email Draft Created',
-      message: `Your default email client was opened to ${SUPPORT_EMAIL}. Thank you for your feedback!`,
+      title: 'Email Draft Ready',
+      message: 'Your default email client was opened with your feedback draft ready to send. Thank you!',
     });
 
     // Reset message
@@ -197,23 +183,18 @@ Local Time: ${new Date().toLocaleString()}
             </p>
           </div>
 
-          {/* Quick Direct Email Pill */}
-          <div className="flex items-center gap-2 bg-[#141722] border border-white/10 px-3.5 py-2 rounded-2xl shadow-sm self-start sm:self-auto">
-            <Mail className="w-4 h-4 text-amber-400 shrink-0" />
+          {/* Direct Support Status Badge */}
+          <div className="flex items-center gap-3 bg-[#141722] border border-white/10 px-4 py-2.5 rounded-2xl shadow-sm self-start sm:self-auto">
+            <div className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </div>
             <div className="text-left">
               <span className="text-[10px] uppercase font-bold text-surface-400 block tracking-wider">
-                Direct Contact
+                Support Channel
               </span>
-              <span className="text-xs font-mono font-bold text-white">{SUPPORT_EMAIL}</span>
+              <span className="text-xs font-semibold text-white">Direct Developer Support</span>
             </div>
-            <button
-              type="button"
-              onClick={handleCopyEmail}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-surface-300 hover:text-white transition-colors cursor-pointer ml-1"
-              title="Copy developer email"
-            >
-              {isCopied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
           </div>
         </div>
 
@@ -352,8 +333,7 @@ Local Time: ${new Date().toLocaleString()}
                   <h2 className="text-base sm:text-lg font-bold text-white">Send Feedback & Report Issues</h2>
                 </div>
                 <p className="text-xs text-surface-400">
-                  Submissions are directly forwarded to developer email{' '}
-                  <span className="text-amber-300 font-mono font-semibold">{SUPPORT_EMAIL}</span>.
+                  Submissions are directly forwarded to the developer support team.
                 </p>
               </div>
 
@@ -441,7 +421,7 @@ Local Time: ${new Date().toLocaleString()}
                     required
                     value={formData.message}
                     onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                    placeholder="Describe your doubt, experience, or issue in detail. We review all messages sent to rashidkp2004@gmail.com..."
+                    placeholder="Describe your doubt, experience, or issue in detail. We review all incoming community messages promptly..."
                     className="w-full p-3.5 rounded-xl bg-[#0e1017] border border-white/10 text-xs text-white placeholder:text-surface-600 outline-none focus:border-amber-500 transition-colors resize-none leading-relaxed"
                   />
                 </div>
@@ -454,11 +434,10 @@ Local Time: ${new Date().toLocaleString()}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-950/40 cursor-pointer disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
-                    <span>Send Feedback to {SUPPORT_EMAIL}</span>
+                    <span>Send Feedback to Support</span>
                   </button>
                   <p className="text-[10px] text-surface-400 text-center mt-2">
-                    Clicking opens your email app with a pre-filled draft to{' '}
-                    <span className="font-mono text-amber-300 font-semibold">{SUPPORT_EMAIL}</span>
+                    Clicking opens your default email client with a pre-filled draft for the support team.
                   </p>
                 </div>
               </form>
