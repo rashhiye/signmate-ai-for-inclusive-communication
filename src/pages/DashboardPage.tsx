@@ -50,10 +50,8 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12]">
-      {/* Left Sidebar */}
-      <div className="hidden md:block">
-        <UserSidebar />
-      </div>
+      {/* Left Sidebar (Desktop + Mobile Drawer) */}
+      <UserSidebar />
 
       {/* Main Content Area */}
       <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 overflow-y-auto custom-scrollbar">

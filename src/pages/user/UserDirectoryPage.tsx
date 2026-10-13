@@ -18,9 +18,7 @@ export const UserDirectoryPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12]">
-      <div className="hidden md:block">
-        <UserSidebar />
-      </div>
+      <UserSidebar />
 
       <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto custom-scrollbar">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">

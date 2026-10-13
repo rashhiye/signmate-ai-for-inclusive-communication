@@ -27,6 +27,8 @@ export const UserOfflineDetectionPage: React.FC = () => {
   const [wordSuggestions, setWordSuggestions] = useState<string[]>([]);
   const [currentGesture, setCurrentGesture] = useState<string>('');
   const [detectionResult, setDetectionResult] = useState<HandDetectionResult | null>(null);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [repeatNotice, setRepeatNotice] = useState('');
   const [isListeningSpeech, setIsListeningSpeech] = useState(false);
   const [spokenCaptions, setSpokenCaptions] = useState<string[]>(['Hi! How are you doing today?']);
   const [speechInputBuffer, setSpeechInputBuffer] = useState('');
@@ -46,11 +48,12 @@ export const UserOfflineDetectionPage: React.FC = () => {
     }
   }, [localStream, isCameraEnabled]);
 
-  // Real-time hand sign detection loop
+  // Real-time hand sign detection loop with intelligent double-letter hold & pulse
   useEffect(() => {
     if (!isCameraEnabled || !localStream) {
       setDetectionResult(null);
       setCurrentGesture('');
+      setHoldProgress(0);
       return;
     }
 
@@ -58,6 +61,8 @@ export const UserOfflineDetectionPage: React.FC = () => {
     let candidateLetter = '';
     let stableCount = 0;
     let lastCommittedLetter = '';
+    let commitTimestamp = 0;
+    let repeatCount = 0;
     let releaseCount = 0;
 
     const intervalId = window.setInterval(async () => {
@@ -68,36 +73,70 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
         setDetectionResult(result);
 
-        // Detect hand release or neutral state to allow signing the same letter again
-        if (!result.hasHand || !result.letter || result.confidence < 0.70) {
+        // Detect hand release, relaxed palm, or neutral state to allow signing the same letter again
+        if (!result.hasHand || !result.letter || result.confidence < 0.65) {
           releaseCount++;
-          // When hand is dropped, pulled away, or relaxed for 2 frames (~360ms), reset committed letter
+          if (!result.letter) {
+            setCurrentGesture('');
+          }
+          // When hand is dropped, opened, or relaxed for 2 frames (~360ms), reset committed letter
           if (releaseCount >= 2) {
             lastCommittedLetter = '';
             candidateLetter = '';
             stableCount = 0;
+            repeatCount = 0;
+            setHoldProgress(0);
+            setCurrentGesture('');
           }
         } else {
           releaseCount = 0;
         }
 
-        if (result.hasHand && result.letter) {
-          setCurrentGesture(result.letter);
+        const validLetter = /^[A-Z]$/.test(result.letter) ? result.letter : '';
 
-          // Anti-spam rule: If user is STILL holding the exact same letter that was already committed,
-          // do NOT append it again.
-          if (result.letter === lastCommittedLetter) {
+        if (result.hasHand && validLetter) {
+          setCurrentGesture(validLetter);
+
+          // CASE 1: User is holding the exact same letter that was already committed (e.g. 'O' after 'MO')
+          // Allow deliberate double/triple letters (like 'OO' in 'MOON', 'LL' in 'HELLO') via hold dwell timer!
+          if (validLetter === lastCommittedLetter) {
             candidateLetter = '';
             stableCount = 0;
+
+            const holdMs = performance.now() - commitTimestamp;
+            // 1.2s hold required for 1st duplicate (e.g. 'OO'), 1.8s for 2nd duplicate (e.g. 'OOO')
+            const requiredMs = repeatCount === 0 ? 1200 : 1800;
+            const progress = Math.min(100, Math.round((holdMs / requiredMs) * 100));
+            setHoldProgress(progress);
+
+            if (holdMs >= requiredMs) {
+              const letter = validLetter;
+              setRecognizedSignText((prev) => {
+                const next = prev + letter;
+                const words = next.split(/\s+/);
+                const lastWord = (words[words.length - 1] || '').toUpperCase();
+                setWordSuggestions(lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : []);
+                return next;
+              });
+
+              commitTimestamp = performance.now();
+              repeatCount++;
+              setHoldProgress(0);
+              setRepeatNotice(`Double letter [${letter}] added`);
+              window.setTimeout(() => setRepeatNotice(''), 2500);
+            }
             return;
           }
 
-          // Append letter when accuracy is >= 70% (0.70) and held stable for 2 frames (~360ms)
-          if (result.confidence >= 0.70) {
-            if (result.letter === candidateLetter) {
+          // Reset hold progress when signing a different letter
+          setHoldProgress(0);
+
+          // CASE 2: New candidate letter committed when held stable for 2 frames (~360ms) with >= 65% confidence
+          if (result.confidence >= 0.65) {
+            if (validLetter === candidateLetter) {
               stableCount++;
               if (stableCount >= 2) {
-                const letter = result.letter;
+                const letter = validLetter;
                 setRecognizedSignText((prev) => {
                   const next = prev + letter;
                   const words = next.split(/\s+/);
@@ -106,15 +145,17 @@ export const UserOfflineDetectionPage: React.FC = () => {
                   return next;
                 });
                 lastCommittedLetter = letter;
+                commitTimestamp = performance.now();
+                repeatCount = 0;
                 stableCount = 0;
                 candidateLetter = '';
+                setHoldProgress(0);
               }
             } else {
-              candidateLetter = result.letter;
+              candidateLetter = validLetter;
               stableCount = 1;
             }
           } else {
-            // Under 70% accuracy - do not print
             candidateLetter = '';
             stableCount = 0;
           }
@@ -122,6 +163,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
           setCurrentGesture('');
           candidateLetter = '';
           stableCount = 0;
+          setHoldProgress(0);
         }
       } catch {
         // continue loop
@@ -225,6 +267,27 @@ export const UserOfflineDetectionPage: React.FC = () => {
     });
   };
 
+  const handleRepeatLastLetter = () => {
+    if (!recognizedSignText) return;
+    const trimmed = recognizedSignText.trimEnd();
+    if (!trimmed) return;
+    const lastChar = trimmed.slice(-1).toUpperCase();
+    if (/^[A-Z]$/.test(lastChar)) {
+      setRecognizedSignText((prev) => {
+        const next = prev + lastChar;
+        const words = next.split(/\s+/);
+        const lastWord = (words[words.length - 1] || '').toUpperCase();
+        setWordSuggestions(lastWord ? dictionaryService.getWordSuggestions(lastWord, 8) : []);
+        return next;
+      });
+      showToast({
+        type: 'info',
+        title: 'Letter Repeated (2x)',
+        message: `Appended duplicate [${lastChar}] (e.g. for "MOON", "HELLO")`,
+      });
+    }
+  };
+
   const selectSuggestion = (word: string) => {
     setRecognizedSignText((prev) => {
       const trimmed = prev.trimEnd();
@@ -259,9 +322,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12]">
-      <div className="hidden md:block">
-        <UserSidebar />
-      </div>
+      <UserSidebar />
 
       <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto custom-scrollbar">
         {/* Header */}
@@ -301,16 +362,33 @@ export const UserOfflineDetectionPage: React.FC = () => {
 
               {currentGesture ? (
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-mono font-bold border transition-all ${
-                      (detectionResult?.confidence || 0) >= 0.85
-                        ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 animate-pulse'
-                        : 'bg-amber-500/20 border-amber-500/60 text-amber-300'
-                    }`}
-                  >
-                    Gesture: [{currentGesture}] {detectionResult?.confidence ? `${Math.round(detectionResult.confidence * 100)}%` : ''}
-                    {(detectionResult?.confidence || 0) >= 0.85 ? ' ✓ Ready' : ' (Hold for ≥85%)'}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-mono font-bold border transition-all ${
+                        (detectionResult?.confidence || 0) >= 0.65
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 animate-pulse'
+                          : 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                      }`}
+                    >
+                      Gesture: [{currentGesture}] {detectionResult?.confidence ? `${Math.round(detectionResult.confidence * 100)}%` : ''}
+                      {holdProgress > 0
+                        ? ` • Hold for 2nd [${currentGesture}] (${holdProgress}%)`
+                        : (detectionResult?.confidence || 0) >= 0.65 ? ' ✓ Ready' : ' (Hold to align)'}
+                    </span>
+                    {holdProgress > 0 && (
+                      <div className="w-36 h-1.5 bg-surface-800 rounded-full overflow-hidden border border-emerald-500/30">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-150"
+                          style={{ width: `${holdProgress}%` }}
+                        />
+                      </div>
+                    )}
+                    {repeatNotice && (
+                      <span className="text-[10px] text-emerald-300 font-semibold animate-pulse">
+                        ✓ {repeatNotice}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <span className="text-[10px] text-[#777] font-medium">Show hand to camera</span>
@@ -430,6 +508,16 @@ export const UserOfflineDetectionPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleRepeatLastLetter}
+                    disabled={!recognizedSignText || recognizedSignText.endsWith(' ')}
+                    className="p-2.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-surface-200 disabled:opacity-40 transition-colors flex items-center gap-1 text-xs font-mono font-bold"
+                    title="Duplicate previous letter (e.g. O -> OO for MOON)"
+                  >
+                    <span className="text-brand-400 font-extrabold">2x</span>
+                    <span className="hidden sm:inline">Repeat</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleSpace}

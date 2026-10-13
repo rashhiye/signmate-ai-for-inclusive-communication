@@ -1,6 +1,6 @@
 import React from 'react';
 import type { RecognitionState, AIState } from '../../types/ai';
-import { Volume2, Trash2, X, Sparkles, Cpu } from 'lucide-react';
+import { Volume2, Trash2, X, Sparkles, Cpu, Copy } from 'lucide-react';
 
 interface RecognitionPanelProps {
   recognition: RecognitionState;
@@ -11,6 +11,7 @@ interface RecognitionPanelProps {
   onSelectSuggestion: (word: string) => void;
   onSpeak: () => void;
   onSimulateLetter?: (char: string) => void;
+  onRepeatLast?: () => void;
 }
 
 export const RecognitionPanel: React.FC<RecognitionPanelProps> = ({
@@ -22,6 +23,7 @@ export const RecognitionPanel: React.FC<RecognitionPanelProps> = ({
   onSelectSuggestion,
   onSpeak,
   onSimulateLetter,
+  onRepeatLast,
 }) => {
   if (!isOpen) return null;
 
@@ -86,8 +88,21 @@ export const RecognitionPanel: React.FC<RecognitionPanelProps> = ({
             </div>
           </div>
 
-          {/* Action buttons: Speak and Clear */}
+          {/* Action buttons: Repeat (2x), Speak, and Clear */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {onRepeatLast && (
+              <button
+                type="button"
+                onClick={onRepeatLast}
+                disabled={!recognition.recognizedText}
+                className="px-2.5 py-1.5 rounded-lg bg-surface-800 hover:bg-brand-900/50 text-brand-300 hover:text-brand-200 border border-brand-800/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-brand-400 min-h-touch flex items-center gap-1 text-xs font-semibold"
+                aria-label="Repeat last character (e.g. OO in MOON)"
+                title="Repeat last letter (e.g. OO in MOON)"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>2x</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onSpeak}
@@ -145,7 +160,7 @@ export const RecognitionPanel: React.FC<RecognitionPanelProps> = ({
             <span className="text-[10px] text-surface-400 uppercase font-semibold shrink-0">
               Test Signs:
             </span>
-            {['H', 'E', 'L', 'P', 'T', 'H', 'A', 'N', 'K', 'S'].map((char, index) => (
+            {['H', 'E', 'L', 'P', 'T', 'H', 'A', 'N', 'K', 'S', 'C', 'M', 'O'].map((char, index) => (
               <button
                 key={`${char}-${index}`}
                 type="button"

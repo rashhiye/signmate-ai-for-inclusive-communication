@@ -12,6 +12,7 @@ export interface UseSignAIResult {
   setPanelOpen: (open: boolean) => void;
   clearRecognized: () => void;
   appendCharacter: (char: string) => void;
+  repeatLastCharacter: () => void;
   deleteLastCharacter: () => void;
   addSpace: () => void;
   selectSuggestion: (word: string) => void;
@@ -84,6 +85,29 @@ export function useSignAI(): UseSignAIResult {
     });
   }, []);
 
+  const repeatLastCharacter = useCallback(() => {
+    setRecognition((r) => {
+      const trimmed = r.recognizedText.trimEnd();
+      if (!trimmed) return r;
+      const lastChar = trimmed.slice(-1).toUpperCase();
+      if (!/^[A-Z]$/.test(lastChar)) return r;
+
+      const nextText = r.recognizedText + lastChar;
+      const words = nextText.split(/\s+/);
+      const lastWord = (words[words.length - 1] || '').toUpperCase();
+      const suggestions = dictionaryService.getWordSuggestions(lastWord, 8);
+
+      return {
+        ...r,
+        recognizedText: nextText,
+        currentPrediction: lastChar,
+        confidence: 0.99,
+        suggestions,
+      };
+    });
+    announceToScreenReader('Repeated previous letter');
+  }, []);
+
   const selectSuggestion = useCallback((word: string) => {
     setRecognition((r) => {
       const trimmed = r.recognizedText.trimEnd();
@@ -153,6 +177,7 @@ export function useSignAI(): UseSignAIResult {
     setPanelOpen,
     clearRecognized,
     appendCharacter,
+    repeatLastCharacter,
     deleteLastCharacter,
     addSpace,
     selectSuggestion,

@@ -13,7 +13,7 @@ export const SIGNMATE_MODEL_FILENAME = 'SignMate_stage1_best.keras';
 export const SIGNMATE_LABELS_FILE = 'signmate_labels.json';
 
 export const SIGNMATE_LABELS: Record<number, string> = {
-  0: '0',
+  0: '', // Background / neutral (no gesture)
   1: 'A',
   2: 'B',
   3: 'C',

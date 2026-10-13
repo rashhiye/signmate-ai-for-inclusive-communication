@@ -7,27 +7,28 @@
 // Core high-frequency conversational English vocabulary to prioritize at the top
 const PRIORITY_WORDS: string[] = [
   'HELLO', 'HELP', 'HOW', 'HAVE', 'HERE', 'HOME', 'HAPPY', 'HEAR', 'HEART', 'HEALTH', 'HEAD', 'HOPE', 'HURT',
-  'THANK', 'THANKS', 'THAT', 'THIS', 'THERE', 'THEY', 'TIME', 'TODAY', 'THINK', 'THROUGH', 'TOGETHER', 'TALK',
-  'PLEASE', 'PEOPLE', 'PERFECT', 'PLACE', 'PLAY', 'PHONE', 'PERSON', 'PAIN', 'PROBLEM', 'PATIENT',
-  'NAME', 'NEED', 'NICE', 'NO', 'NOTHING', 'NEW', 'NEXT', 'NIGHT', 'NOW', 'NEVER', 'NEAR', 'NEWS',
+  'THANK', 'THANKS', 'THAT', 'THIS', 'THERE', 'THEY', 'TIME', 'TODAY', 'THINK', 'THROUGH', 'TOGETHER', 'TALK', 'TRUE',
+  'PLEASE', 'PEOPLE', 'PERFECT', 'PLACE', 'PLAY', 'PHONE', 'PERSON', 'PAIN', 'PROBLEM', 'PATIENT', 'POOL', 'PASS',
+  'NAME', 'NEED', 'NICE', 'NO', 'NOTHING', 'NEW', 'NEXT', 'NIGHT', 'NOW', 'NEVER', 'NEAR', 'NEWS', 'NOON',
   'MAKE', 'MEET', 'MORE', 'MORNING', 'MUCH', 'MAYBE', 'MOTHER', 'MIND', 'MESSAGE', 'MEETING', 'MEMORY', 'MONEY', 'MINUTE',
-  'YES', 'YOU', 'YOUR', 'YESTERDAY', 'YEAR', 'YOUNG',
-  'SIGN', 'SORRY', 'SEE', 'SURE', 'SOME', 'SMILE', 'START', 'SPEAK', 'STOP', 'SAFE', 'SCHOOL', 'SISTER', 'SICK',
-  'GOOD', 'GREAT', 'GLAD', 'GO', 'GOING', 'GIVE', 'GIRL', 'GOODBYE', 'GROUP',
-  'FINE', 'FRIEND', 'FAMILY', 'FOR', 'FEEL', 'FIND', 'FIRST', 'FOOD', 'FATHER', 'FAST',
-  'CAN', 'CALL', 'COME', 'CARE', 'CHANGE', 'CHILD', 'CITY', 'CLEAN', 'COLD', 'CLOSE',
-  'BYE', 'BEAUTIFUL', 'BAD', 'BEST', 'BOY', 'BROTHER', 'BODY', 'BUSY', 'BOOK', 'BREAK',
-  'LOVE', 'LIKE', 'LEARN', 'LOOK', 'LIFE', 'LITTLE', 'LEAVE', 'LISTEN', 'LATE', 'LONG',
-  'DEAF', 'DAY', 'DO', 'DOCTOR', 'DOOR', 'DRINK', 'DRIVE', 'DIFFERENT', 'DEAR',
-  'ALL', 'AND', 'ARE', 'ABOUT', 'AFTER', 'ALWAYS', 'AGAIN', 'ASK', 'ANSWER', 'ALRIGHT', 'ALONE',
-  'OKAY', 'ONE', 'OPEN', 'ONLY', 'OTHER', 'OUR', 'OUT', 'OVER', 'ORDER', 'OLD',
+  'MOON', 'MOOD', 'MONTH', 'MOVE', 'MOVIE', 'MOST', 'MODEL', 'MONDAY',
+  'YES', 'YOU', 'YOUR', 'YESTERDAY', 'YEAR', 'YOUNG', 'YELLOW',
+  'SIGN', 'SORRY', 'SEE', 'SEEN', 'SEEM', 'SURE', 'SOME', 'SMILE', 'START', 'SPEAK', 'STOP', 'SAFE', 'SCHOOL', 'SISTER', 'SICK', 'SOON', 'SLEEP', 'SWEET', 'STILL', 'SMALL', 'SPEED',
+  'GOOD', 'GREAT', 'GLAD', 'GO', 'GOING', 'GIVE', 'GIRL', 'GOODBYE', 'GROUP', 'GREEN', 'GRASS', 'GLASS',
+  'FINE', 'FRIEND', 'FAMILY', 'FOR', 'FEEL', 'FEET', 'FIND', 'FIRST', 'FOOD', 'FATHER', 'FAST', 'FREE', 'FLOOR', 'FALSE',
+  'CAN', 'CALL', 'COME', 'CARE', 'CHANGE', 'CHILD', 'CITY', 'CLEAN', 'COLD', 'CLOSE', 'COOL', 'COOK', 'COFFEE', 'CLASS', 'CAT', 'CAR', 'CHAT', 'CHECK', 'CLEAR', 'CONNECT', 'CORRECT',
+  'BYE', 'BEAUTIFUL', 'BAD', 'BEST', 'BOY', 'BROTHER', 'BODY', 'BUSY', 'BOOK', 'BREAK', 'BETTER', 'BOTTLE', 'BALL',
+  'LOVE', 'LIKE', 'LEARN', 'LOOK', 'LIFE', 'LITTLE', 'LEAVE', 'LISTEN', 'LATE', 'LONG', 'LETTER', 'LESS',
+  'DEAF', 'DAY', 'DO', 'DOCTOR', 'DOOR', 'DRINK', 'DRIVE', 'DIFFERENT', 'DEAR', 'DEEP', 'DINNER',
+  'ALL', 'AND', 'ARE', 'ABOUT', 'AFTER', 'ALWAYS', 'AGAIN', 'ASK', 'ANSWER', 'ALRIGHT', 'ALONE', 'APPLE', 'APPLY',
+  'OKAY', 'ONE', 'OPEN', 'ONLY', 'OTHER', 'OUR', 'OUT', 'OVER', 'ORDER', 'OLD', 'OFFICE', 'OFFICER',
   'IMPORTANT', 'INSIDE', 'INTERESTING', 'INVITE', 'IDEA', 'INFORMATION', 'ISSUE',
   'UNDERSTAND', 'USE', 'UP', 'UNTIL', 'UNDER', 'USUAL', 'URGENT',
-  'READY', 'RIGHT', 'REALLY', 'REMEMBER', 'ROOM', 'READ', 'REST', 'REASON',
-  'WORK', 'WHAT', 'WHERE', 'WHEN', 'WHY', 'WHO', 'WILL', 'WITH', 'WATER', 'WELCOME', 'WAIT', 'WORD', 'WORLD', 'WANT', 'WEEK', 'WOMAN',
+  'READY', 'RIGHT', 'REALLY', 'REMEMBER', 'ROOM', 'READ', 'REST', 'REASON', 'RUNNING', 'ROLL',
+  'WORK', 'WHAT', 'WHERE', 'WHEN', 'WHY', 'WHO', 'WILL', 'WITH', 'WATER', 'WELCOME', 'WAIT', 'WORD', 'WORLD', 'WANT', 'WEEK', 'WOMAN', 'WELL', 'WOOD', 'WORRY',
   'VERY', 'VOICE', 'VISIT', 'VIDEO', 'VIEW', 'VACATION',
   'EAT', 'EASY', 'EVERY', 'EARLY', 'ENJOY', 'ENOUGH', 'EVENING', 'EXCUSE', 'EYE',
-  'KNOW', 'KEEP', 'KIND', 'KID', 'KEY', 'KITCHEN',
+  'KNOW', 'KEEP', 'KIND', 'KID', 'KEY', 'KITCHEN', 'KISS',
   'JUST', 'JOB', 'JOIN', 'JOY', 'JOURNEY',
   'QUESTION', 'QUICK', 'QUIET', 'QUITE',
   'ZERO', 'ZONE', 'ZOOM',
@@ -36,6 +37,7 @@ const PRIORITY_WORDS: string[] = [
 
 class DictionaryService {
   private wordsList: string[] = [];
+  private fallbackDict: string[] = [];
   private isLoaded = false;
   private loadPromise: Promise<void> | null = null;
 
@@ -44,7 +46,7 @@ class DictionaryService {
   }
 
   /**
-   * Asynchronously loads the 95,000+ words exported from dictionary_compact.json
+   * Asynchronously loads high-frequency conversational words and fallback dictionary
    */
   public async init(): Promise<void> {
     if (this.isLoaded) return;
@@ -53,23 +55,35 @@ class DictionaryService {
     this.loadPromise = (async () => {
       try {
         if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
-          const res = await fetch('/dictionary_words.json');
+          // 1. Try loading Google Top 10,000 real-world frequency vocabulary
+          const res = await fetch('/conversational_words.json');
           if (res.ok) {
             const data: string[] = await res.json();
             if (Array.isArray(data) && data.length > 0) {
               this.wordsList = data;
               this.isLoaded = true;
-              console.log(`[SignMate] Loaded ${data.length} words from dictionary_compact.json`);
               return;
             }
           }
         }
-      } catch (err) {
-        console.warn('[SignMate] Could not fetch /dictionary_words.json:', err);
+      } catch {
+        // Fallback to priority list
       }
 
-      // Fallback: use priority words list
-      this.wordsList = [...PRIORITY_WORDS].sort();
+      try {
+        if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+          const res2 = await fetch('/dictionary_words.json');
+          if (res2.ok) {
+            const data2: string[] = await res2.json();
+            if (Array.isArray(data2) && data2.length > 0) {
+              this.fallbackDict = data2;
+            }
+          }
+        }
+      } catch {
+        // Fallback
+      }
+
       this.isLoaded = true;
     })();
 
@@ -77,34 +91,8 @@ class DictionaryService {
   }
 
   /**
-   * Fast binary search for first index of word starting with prefix
-   */
-  private binarySearchPrefix(prefix: string): number {
-    let low = 0;
-    let high = this.wordsList.length - 1;
-    let result = -1;
-
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      const word = this.wordsList[mid];
-
-      if (word.startsWith(prefix)) {
-        result = mid;
-        high = mid - 1; // keep looking left for the first occurrence
-      } else if (word < prefix) {
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Returns word recommendations starting with given prefix.
-   * Prioritizes common everyday conversational words, followed by dictionary words.
-   * Only returns the words (no definitions or meanings).
+   * Returns intelligent word recommendations starting with given prefix.
+   * Prioritizes conversational sign vocabulary first, then top English frequency words.
    */
   public getWordSuggestions(rawPrefix: string, maxResults = 8): string[] {
     const prefix = (rawPrefix || '').trim().toUpperCase();
@@ -113,7 +101,7 @@ class DictionaryService {
     const results: string[] = [];
     const seen = new Set<string>();
 
-    // 1. First add matching high-priority conversational words
+    // 1. Immediate priority conversational sign words
     for (const word of PRIORITY_WORDS) {
       if (word.startsWith(prefix) && !seen.has(word)) {
         results.push(word);
@@ -124,21 +112,29 @@ class DictionaryService {
       }
     }
 
-    // 2. Query 95,000+ words from dictionary_compact.json
+    // 2. High-frequency real-world conversational words (Google 10K dataset)
     if (this.wordsList.length > 0) {
-      const firstIdx = this.binarySearchPrefix(prefix);
-      if (firstIdx !== -1) {
-        for (let i = firstIdx; i < this.wordsList.length; i++) {
-          const w = this.wordsList[i];
-          if (!w.startsWith(prefix)) break;
+      for (let i = 0; i < this.wordsList.length; i++) {
+        const w = this.wordsList[i];
+        if (w.startsWith(prefix) && !seen.has(w)) {
+          results.push(w);
+          seen.add(w);
+          if (results.length >= maxResults) {
+            return results;
+          }
+        }
+      }
+    }
 
-          if (!seen.has(w)) {
-            // Prefer words of reasonable conversational length (<= 12 chars)
-            results.push(w);
-            seen.add(w);
-            if (results.length >= maxResults) {
-              break;
-            }
+    // 3. Fallback to dictionary words if still need results
+    if (this.fallbackDict.length > 0 && results.length < maxResults) {
+      for (let i = 0; i < this.fallbackDict.length; i++) {
+        const w = this.fallbackDict[i];
+        if (w.startsWith(prefix) && !seen.has(w)) {
+          results.push(w);
+          seen.add(w);
+          if (results.length >= maxResults) {
+            break;
           }
         }
       }
