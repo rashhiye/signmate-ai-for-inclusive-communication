@@ -911,33 +911,16 @@ export const RoomPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Waiting for partner screen */
-              <div className="text-center p-6 text-surface-400 space-y-3 z-10">
-                <div className="w-16 h-16 rounded-full bg-surface-800/80 border border-white/10 flex items-center justify-center mx-auto text-surface-300">
+              /* Waiting for partner screen (Clean WhatsApp call style) */
+              <div className="text-center p-6 text-surface-400 space-y-2.5 z-10 select-none">
+                <div className="w-16 h-16 rounded-full bg-[#1e212b] border border-white/10 flex items-center justify-center mx-auto text-surface-400 animate-pulse">
                   <Users className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Waiting for Others to Join</h3>
-                  <p className="text-xs text-surface-400 mt-1 max-w-xs mx-auto">
-                    Share your room code to start real-time video call (Up to 4 participants):
+                  <h3 className="text-sm font-semibold text-white">Waiting for Partner...</h3>
+                  <p className="text-xs text-surface-400 mt-0.5">
+                    Room: <span className="font-mono text-blue-400 font-bold">{currentRoomId}</span>
                   </p>
-                  <span
-                    onClick={copyRoomLink}
-                    className="font-mono text-sm text-blue-400 font-bold block mt-2 hover:text-blue-300 cursor-pointer underline decoration-dotted"
-                    title="Click to copy room code"
-                  >
-                    {currentRoomId}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={copyRoomLink}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy Invite Link
-                  </button>
                 </div>
               </div>
             )}
