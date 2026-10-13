@@ -1,46 +1,50 @@
 # SignMate — AI-Assisted Inclusive Communication
 
-SignMate is a modern, production-ready web platform engineered to bridge communication between sign-language users and English-speaking users. It combines small-group video conferencing (3–5 participants), on-device ISL gesture alphabet recognition, and contextual word predictions in a clean, highly accessible communication interface.
+> **MCA Final-Year Project Presentation & Technical Viva Voce**  
+> **Candidate:** Muhammed Rashid KP (Register No: `TVE25MCA-2046`)  
+> **Institution:** Department of Computer Applications, College of Engineering Trivandrum (TVE)  
+> **Live Web Application:** [signmate-ashy.vercel.app](https://signmate-ashy.vercel.app/)
 
 ---
 
-## Architecture
+## 📄 Complete Project Documentation & Viva Voce Guide
+- **[SignMate Complete Project Documentation & Viva Guide (PDF)](./SignMate_Complete_Project_Documentation_and_Viva_Guide.pdf)** — Comprehensive 71-page academic project documentation including all 22 chapters, system architectures, full WebRTC math, MobileNetV3Small layer audits, and 110 categorized viva questions with deep model answers.
+- **[Editable Source Document (HTML)](./SignMate_Complete_Project_Documentation_and_Viva_Guide.html)** — Standalone source document used to compile the PDF.
+- **[Edge TFLite Model](./SignMate_MobileNetV3Small.tflite)** — Converted 3.88 MB TensorFlow Lite model (`[1, 160, 160, 1]` input, 27 output classes).
+
+---
+
+## Architecture Overview
 
 ```text
-                    SIGNMATE WEB
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-     Firebase        ZEGOCLOUD         FastAPI
-     Auth/DB        Video Conference    AI API
-        │                │                │
-        │                │            Keras model
-        │                │         (MobileNetV3Small)
-        │                │                │
-        │                │                ↓
-        │                │             A–Z (27 classes)
-        │                │                │
-        │                │                ↓
-        │                │             Gemini
-        │                │       (Contextual Suggestions)
-        │                │                │
-        └────────────────┴────────────────┘
-                         │
-                        UI
+                    SIGNMATE WEB (React 19 + TypeScript + Vite)
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        │                                │                                │
+     Firebase                         WebRTC                           FastAPI
+  Auth / Firestore / RTDB           Full Mesh P2P                    AI Inference
+        │                         (Up to 4 Callers)                       │
+        │                                │                           Keras / TFLite
+        │                                │                         (MobileNetV3Small)
+        │                                │                           97% Test Accuracy
+        │                                │                                │
+        │                                │                                ↓
+        │                                │                         27 Classes (0-26)
+        │                                │                                │
+        │                                │                                ↓
+        │                                │                        Dictionary Engine
+        │                                │                       (95,000+ Word Cache)
+        └────────────────────────────────┴────────────────────────────────┘
+                                         │
+                        UI, Subtitles & Speech Synthesis
 ```
 
-- **Firebase (Client SDK / Auth & Firestore - Phase 2)**:
-  - User authentication (Email/Password, Google Sign-in)
-  - Room metadata & participant presence persistence (`rooms/{roomId}/participants/{uid}`)
-- **ZEGOCLOUD (Conference Web SDK - Phase 3)**:
-  - Audio and video conferencing for 3–5 participants
-  - Camera & microphone media streams
-- **FastAPI (AI Inference - Phase 4)**:
-  - Loads the trained `SignMate_MobileNetV3Small` model (~97% test accuracy, 27 classes: 0 = background, 1–26 = A–Z)
-  - Accepts [1, 160, 160, 1] grayscale frames (0–255 pixel range)
-- **Gemini (Contextual Suggestions - Phase 5)**:
-  - Backend proxy converts recognized letter sequences into contextual words and phrases
-  - *Browser never contains Gemini API secrets or ZEGOCLOUD server secrets.*
+- **Web Frontend (Vercel)**: React 19, TypeScript, Tailwind CSS, MediaPipe Hands.
+- **P2P Video Conferencing (Native WebRTC)**: 4-participant full mesh ($N(N-1)/2 = 6$ connections), Google STUN, encrypted DTLS-SRTP UDP media plane.
+- **Signaling Bus (Firebase RTDB)**: 3-tier signaling (BroadcastChannel, LAN FastAPI, Google RTDB) with deterministic glare prevention (`this.clientId < remoteId`).
+- **AI Recognition (MobileNetV3Small)**: 27 classes (Class 0 = background/neutral, Classes 1–26 = letters A–Z). Input `[1, 160, 160, 1]` float32 grayscale (0–255 range).
+- **Language Assistance**: Client-side 95,000-word dictionary service prioritizing high-frequency conversational phrases with sub-2ms prefix lookups.
+
 
 ---
 
