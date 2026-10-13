@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserSidebar } from '../components/user/UserSidebar';
-import { CreateRoomModal } from '../rooms/CreateRoomModal';
-import { JoinRoomModal } from '../rooms/JoinRoomModal';
 import { SignMateLogo } from '../components/brand/SignMateLogo';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -18,16 +16,12 @@ import {
   User as UserIcon,
   Shield,
   LogOut,
-  PlusCircle,
-  Hash,
   Camera,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isJoinOpen, setIsJoinOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -79,27 +73,6 @@ export const DashboardPage: React.FC = () => {
               deaf/mute individuals and the hearing community. We utilize advanced translation
               technology to foster seamless two-way interaction.
             </p>
-          </div>
-
-          {/* Quick Call Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(true)}
-              className="px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm flex items-center gap-2.5 shadow-lg shadow-brand-500/25 transition-all active:scale-[0.98]"
-            >
-              <PlusCircle className="w-5 h-5" />
-              <span>Create Video Room</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsJoinOpen(true)}
-              className="px-6 py-3 rounded-xl bg-surface-800 hover:bg-surface-700 text-surface-100 border border-surface-700 font-semibold text-sm flex items-center gap-2.5 shadow-md transition-all active:scale-[0.98]"
-            >
-              <Hash className="w-5 h-5 text-brand-400" />
-              <span>Join Room</span>
-            </button>
           </div>
 
           {/* 3 Core Translation Feature Cards from Page 66 */}
@@ -164,10 +137,6 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Modals */}
-      <CreateRoomModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
-      <JoinRoomModal isOpen={isJoinOpen} onClose={() => setIsJoinOpen(false)} />
     </div>
   );
 };
