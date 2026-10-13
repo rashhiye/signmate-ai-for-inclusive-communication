@@ -164,7 +164,11 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
       // Badge background pill
       ctx.fillStyle = '#facc15';
       ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY - 26, 50, 26, [8]);
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(badgeX, badgeY - 26, 50, 26, [8]);
+      } else {
+        ctx.rect(badgeX, badgeY - 26, 50, 26);
+      }
       ctx.fill();
 
       // Badge text
@@ -174,7 +178,7 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText(letter, badgeX + 25, badgeY - 13);
     }
-  }, [hasHand, landmarks, letter, confidence, isMirrored]);
+  }, [hasHand, landmarks, letter, confidence, isMirrored, fitMode, videoRef]);
 
   return (
     <div className="absolute inset-0 z-20 pointer-events-none select-none">

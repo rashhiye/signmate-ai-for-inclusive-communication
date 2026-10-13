@@ -445,6 +445,8 @@ export const UserOfflineDetectionPage: React.FC = () => {
                   confidence={detectionResult?.confidence}
                   source={detectionResult?.source}
                   isMirrored={true}
+                  videoRef={videoRef}
+                  fitMode="cover"
                 />
               )}
 

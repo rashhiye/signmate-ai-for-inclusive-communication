@@ -83,7 +83,7 @@ export class HandSignDetector {
             modelComplexity: 0,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
-            selfieMode: true,
+            selfieMode: false,
           });
 
           this.mediaPipeHands.onResults((results: any) => {
