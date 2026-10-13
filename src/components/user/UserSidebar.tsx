@@ -5,13 +5,7 @@ import { SignMateLogo } from '../brand/SignMateLogo';
 import {
   Home,
   Key,
-  Users,
-  Send,
-  Eye,
-  CheckSquare,
-  AlertTriangle,
   MessageSquare,
-  UserCheck,
   User,
   LogOut,
   Camera,
@@ -36,17 +30,11 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
   };
 
   const navItems = [
-    { label: 'Home', to: '/dashboard', icon: <Home className="w-4 h-4" /> },
+    { label: 'Home', to: '/dashboard', icon: <Home className="w-4 h-4 text-blue-400" /> },
     { label: 'Practice Signs', to: '/user/offline-detection', icon: <Camera className="w-4 h-4 text-emerald-400" /> },
-    { label: 'Change Password', to: '/user/change-password', icon: <Key className="w-4 h-4" /> },
-    { label: 'Find Users', to: '/user/find-users', icon: <Users className="w-4 h-4" /> },
-    { label: 'My Requests', to: '/user/requests', icon: <Send className="w-4 h-4" /> },
-    { label: 'Profile Details', to: '/user/profile', icon: <Eye className="w-4 h-4" /> },
-    { label: 'Request Status', to: '/user/requests?tab=status', icon: <CheckSquare className="w-4 h-4" /> },
-    { label: 'Complaints', to: '/user/complaints', icon: <AlertTriangle className="w-4 h-4" /> },
-    { label: 'Send Feedback', to: '/user/feedback', icon: <MessageSquare className="w-4 h-4" /> },
-    { label: 'Friends', to: '/user/friends', icon: <UserCheck className="w-4 h-4" /> },
-    { label: 'Profile', to: '/user/profile', icon: <User className="w-4 h-4" /> },
+    { label: 'My Profile', to: '/user/profile', icon: <User className="w-4 h-4 text-purple-400" /> },
+    { label: 'Support & Feedback', to: '/user/support', icon: <MessageSquare className="w-4 h-4 text-amber-400" /> },
+    { label: 'Change Password', to: '/user/change-password', icon: <Key className="w-4 h-4 text-cyan-400" /> },
   ];
 
   const renderNavContent = (isMobileView = false) => (

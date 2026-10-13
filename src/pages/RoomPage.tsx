@@ -917,75 +917,6 @@ export const RoomPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                {/* Floating Partner Subtitles Card (WhatsApp Call Style) */}
-                <div className="absolute bottom-3 left-3 right-3 sm:left-4 sm:right-4 z-20 bg-[#101217]/90 backdrop-blur-xl border border-white/15 p-2.5 sm:p-3 rounded-2xl shadow-2xl">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="text-[11px] font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1">
-                        <Volume2 className="w-3.5 h-3.5" />
-                        Live Partner Subtitles
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {partnerLiveLetter && (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px] font-mono font-bold">
-                          [{partnerLiveLetter}]
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = !isAutoSpeakEnabled;
-                          setIsAutoSpeakEnabled(next);
-                          showToast({
-                            type: 'info',
-                            title: next ? 'Auto-Voice Enabled' : 'Auto-Voice Muted',
-                            message: next ? 'Incoming signs will be vocalized.' : 'Muted incoming signs.',
-                          });
-                        }}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
-                          isAutoSpeakEnabled
-                            ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300'
-                            : 'bg-[#22252e] border-white/10 text-surface-400 hover:text-white'
-                        }`}
-                      >
-                        <Volume2 className="w-3 h-3" />
-                        <span>Voice: {isAutoSpeakEnabled ? 'ON' : 'OFF'}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs sm:text-sm font-semibold text-white tracking-wide leading-relaxed break-words flex-1">
-                      {partnerLiveCaption ? (
-                        <span>{partnerLiveCaption}</span>
-                      ) : (
-                        <span className="text-surface-400 text-xs italic font-normal">
-                          Partner's live signed words and voice transcriptions will appear here...
-                        </span>
-                      )}
-                    </p>
-                    {partnerLiveCaption && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.speechSynthesis) {
-                            window.speechSynthesis.cancel();
-                            const clean = partnerLiveCaption.replace(/^\[.*?\]:\s*/, '');
-                            const u = new SpeechSynthesisUtterance(clean);
-                            window.speechSynthesis.speak(u);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center gap-1 transition-colors shadow cursor-pointer shrink-0"
-                        title="Listen aloud with Voice Synthesis"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Listen</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
             ) : (
               /* Waiting for partner screen (Clean WhatsApp call style) */
@@ -1026,8 +957,80 @@ export const RoomPage: React.FC = () => {
           )}
         </div>
 
-        {/* MAIN SCREEN FLOATING ASSISTIVE BAR (Sign AI, Live Buffer & Word Suggestions) */}
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 w-[95%] max-w-2xl transition-all duration-300 pointer-events-auto">
+        {/* FLOATING STREAM MESSAGES & ASSISTIVE OPTIONS SECTION (Just above bottom controls) */}
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 w-[95%] max-w-2xl flex flex-col gap-2 pointer-events-auto transition-all duration-300">
+          {/* Live Stream Messages & Subtitles Card (Moved out of video tile to just above options) */}
+          {(partnerLiveCaption || isPartnerConnected) && (
+            <div className="bg-[#101217]/95 backdrop-blur-2xl border border-white/15 p-2.5 sm:p-3 rounded-2xl shadow-2xl transition-all">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-[11px] font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1">
+                    <Volume2 className="w-3.5 h-3.5" />
+                    Live Stream Messages & Subtitles
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {partnerLiveLetter && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px] font-mono font-bold">
+                      [{partnerLiveLetter}]
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isAutoSpeakEnabled;
+                      setIsAutoSpeakEnabled(next);
+                      showToast({
+                        type: 'info',
+                        title: next ? 'Auto-Voice Enabled' : 'Auto-Voice Muted',
+                        message: next ? 'Incoming signs will be vocalized.' : 'Muted incoming signs.',
+                      });
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
+                      isAutoSpeakEnabled
+                        ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300'
+                        : 'bg-[#22252e] border-white/10 text-surface-400 hover:text-white'
+                    }`}
+                  >
+                    <Volume2 className="w-3 h-3" />
+                    <span>Voice: {isAutoSpeakEnabled ? 'ON' : 'OFF'}</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs sm:text-sm font-semibold text-white tracking-wide leading-relaxed break-words flex-1">
+                  {partnerLiveCaption ? (
+                    <span>{partnerLiveCaption}</span>
+                  ) : (
+                    <span className="text-surface-400 text-xs italic font-normal">
+                      Live signed messages and voice transcriptions stream here in real-time...
+                    </span>
+                  )}
+                </p>
+                {partnerLiveCaption && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                        const clean = partnerLiveCaption.replace(/^\[.*?\]:\s*/, '');
+                        const u = new SpeechSynthesisUtterance(clean);
+                        window.speechSynthesis.speak(u);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center gap-1 transition-colors shadow cursor-pointer shrink-0"
+                    title="Listen aloud with Voice Synthesis"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Listen</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MAIN SCREEN FLOATING ASSISTIVE BAR (Sign AI, Live Buffer & Word Suggestions) */}
           <div className="bg-[#12141a]/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-2.5 sm:p-3 text-xs space-y-2">
             {/* Header / Buffer Row */}
             <div className="flex items-center justify-between gap-2">

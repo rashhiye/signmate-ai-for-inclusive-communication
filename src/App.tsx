@@ -17,12 +17,7 @@ import { RoomPage } from './pages/RoomPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SecurityPage } from './pages/common/SecurityPage';
 
-// User Portal Pages (Matching Report Modules & Screenshots)
-import { UserFriendsPage } from './pages/user/UserFriendsPage';
-import { UserDirectoryPage } from './pages/user/UserDirectoryPage';
-import { UserRequestsPage } from './pages/user/UserRequestsPage';
-import { UserComplaintsPage } from './pages/user/UserComplaintsPage';
-import { UserFeedbackPage } from './pages/user/UserFeedbackPage';
+import { UserSupportPage } from './pages/user/UserSupportPage';
 import { UserProfilePage } from './pages/user/UserProfilePage';
 import { UserOfflineDetectionPage } from './pages/user/UserOfflineDetectionPage';
 
@@ -66,11 +61,12 @@ const AppLayout: React.FC = () => {
           <Route path="/user/offline-detection" element={<UserOfflineDetectionPage />} />
           <Route path="/user/learning" element={<Navigate to="/dashboard" replace />} />
           <Route path="/user/change-password" element={<SecurityPage />} />
-          <Route path="/user/find-users" element={<UserDirectoryPage />} />
-          <Route path="/user/requests" element={<UserRequestsPage />} />
-          <Route path="/user/complaints" element={<UserComplaintsPage />} />
-          <Route path="/user/feedback" element={<UserFeedbackPage />} />
-          <Route path="/user/friends" element={<UserFriendsPage />} />
+          <Route path="/user/find-users" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/user/support" element={<UserSupportPage />} />
+          <Route path="/user/feedback" element={<Navigate to="/user/support" replace />} />
+          <Route path="/user/complaints" element={<Navigate to="/user/support" replace />} />
+          <Route path="/user/requests" element={<Navigate to="/user/support" replace />} />
+          <Route path="/user/friends" element={<Navigate to="/user/support" replace />} />
           <Route path="/user/profile" element={<UserProfilePage />} />
 
           {/* Legacy /admin redirects */}
