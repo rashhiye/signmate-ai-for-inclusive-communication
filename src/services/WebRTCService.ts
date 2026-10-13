@@ -26,6 +26,7 @@ export interface WebRTCCallback {
   onLiveCaption?: (caption: { senderId: string; letter: string; text: string }) => void;
   onSignalingStatus?: (status: { rtdbConnected: boolean; error?: string }) => void;
   onPeerCountChange?: (count: number) => void;
+  onRoomFull?: () => void;
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -438,6 +439,13 @@ export class WebRTCService {
       const peersSnapshot = await get(peersRef).catch(() => null);
       const existingPeers = peersSnapshot && peersSnapshot.exists() ? peersSnapshot.val() : {};
       const activePeerIds = Object.keys(existingPeers).filter((id) => id !== this.clientId);
+
+      // Enforce room maximum capacity (maximum 4 participants)
+      if (activePeerIds.length >= 4) {
+        console.warn(`[WebRTC] Room ${roomId} is full (max 4 participants).`);
+        this.callbacks?.onRoomFull?.();
+        return;
+      }
 
       // If room was empty, purge any stale offers/answers/candidates from abandoned sessions
       if (activePeerIds.length === 0) {

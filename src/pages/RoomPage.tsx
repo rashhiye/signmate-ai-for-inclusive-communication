@@ -7,7 +7,6 @@ import { useToast } from '../hooks/useToast';
 import { webRTCService } from '../services/WebRTCService';
 import { handSignDetector, type HandDetectionResult } from '../ai/handSignDetector';
 import { HandLandmarkOverlay } from '../components/ai/HandLandmarkOverlay';
-import { normalizeRoomCode } from '../utils/roomCode';
 import {
   Mic,
   MicOff,
@@ -20,8 +19,6 @@ import {
   Volume2,
   Trash2,
   X,
-  Plus,
-  LogIn,
   Copy,
   Users,
   Space,
@@ -32,6 +29,7 @@ import {
   ChevronUp,
   Activity,
   Sliders,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -83,8 +81,9 @@ export const RoomPage: React.FC = () => {
   const [rtdbConnected, setRtdbConnected] = useState<boolean>(true);
   const [partnerLiveCaption, setPartnerLiveCaption] = useState<string>('');
   const [partnerLiveLetter, setPartnerLiveLetter] = useState<string>('');
-  const [isSelfLoopback, setIsSelfLoopback] = useState<boolean>(false);
+  const isSelfLoopback = false;
   const [isAutoSpeakEnabled, setIsAutoSpeakEnabled] = useState<boolean>(true);
+  const [isRoomFull, setIsRoomFull] = useState<boolean>(false);
   const isAutoSpeakRef = useRef<boolean>(true);
   const recognizedTextRef = useRef<string>('');
 
@@ -237,6 +236,14 @@ export const RoomPage: React.FC = () => {
       },
       onPeerCountChange: (count) => {
         setPeerCount(count);
+      },
+      onRoomFull: () => {
+        setIsRoomFull(true);
+        showToast({
+          type: 'error',
+          title: 'Room Full',
+          message: 'This video call already has the maximum of 4 participants.',
+        });
       },
     });
 
@@ -568,13 +575,31 @@ export const RoomPage: React.FC = () => {
     showToast({
       type: 'success',
       title: 'Link Copied',
-      message: `Share this link or room code ${currentRoomId} to connect via WebRTC!`,
+      message: `Share room code ${currentRoomId} to connect via WebRTC!`,
     });
   };
 
   const openChatDrawer = () => {
     setIsChatDrawerOpen(true);
     setUnreadCount(0);
+  };
+
+  // Compute dynamic WhatsApp Call grid class based on peerCount (Max 4)
+  const effectivePeerCount = Math.min(4, Math.max(1, peerCount));
+  const getGridClasses = () => {
+    if (effectivePeerCount === 1) {
+      return 'grid-cols-1 grid-rows-1';
+    }
+    if (effectivePeerCount === 2) {
+      // 2 users: stacked on mobile, side-by-side on desktop
+      return 'grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1';
+    }
+    if (effectivePeerCount === 3) {
+      // 3 users: 1 top hero, 2 bottom on mobile; 3 columns on desktop
+      return 'grid-cols-2 md:grid-cols-3 grid-rows-2 md:grid-rows-1';
+    }
+    // 4 users: 2x2 grid on both mobile and desktop (WhatsApp 4-person style)
+    return 'grid-cols-2 grid-rows-2';
   };
 
   return (
@@ -608,24 +633,23 @@ export const RoomPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Center: Live Call Status */}
-        <div className="hidden md:flex items-center gap-2">
+        {/* Center: Live Call Status & Participant Count */}
+        <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-[11px] font-semibold text-emerald-300 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>
               {isPartnerConnected
-                ? (isSelfLoopback ? 'Self Test Mode' : 'Connected')
-                : 'Waiting for partner...'}
+                ? (isSelfLoopback ? 'Self Test' : 'Connected')
+                : 'Active Call'}
             </span>
           </div>
-          <span className="text-[11px] text-surface-400 font-mono">
-            {peerCount} {peerCount === 1 ? 'user' : 'users'}
+          <span className="text-[11px] text-surface-400 font-mono px-2 py-0.5 rounded-full bg-[#1b1e26] border border-white/5">
+            {effectivePeerCount}/4 in call
           </span>
         </div>
 
-        {/* Right: Quick Controls & Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Quick Voice Subtitles Toggle */}
+        {/* Right: Quick Subtitles Voice Toggle */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -638,7 +662,7 @@ export const RoomPage: React.FC = () => {
                   : 'Voice transcription paused.',
               });
             }}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
               isListeningSpeech
                 ? 'bg-blue-600/30 border-blue-500/60 text-blue-300'
                 : 'bg-[#1b1e26] border-white/10 text-surface-400 hover:text-white'
@@ -647,36 +671,6 @@ export const RoomPage: React.FC = () => {
           >
             <Mic className="w-3.5 h-3.5 text-blue-400" />
             <span className="hidden sm:inline">Subtitles:</span> {isListeningSpeech ? 'ON' : 'OFF'}
-          </button>
-
-          {/* Quick Add/Join buttons */}
-          <button
-            onClick={() => {
-              const newCode = `SM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-              navigate(`/room/${newCode}`);
-              showToast({ type: 'success', title: 'New Room Created', message: `Room code: ${newCode}` });
-            }}
-            className="p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-            title="Create New Room"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">New</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const inputCode = prompt('Enter Room Code to Join:');
-              if (inputCode && inputCode.trim()) {
-                const normalized = normalizeRoomCode(inputCode);
-                navigate(`/room/${normalized}`);
-                showToast({ type: 'info', title: 'Connecting to Room', message: `Joining ${normalized}...` });
-              }
-            }}
-            className="p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-[#22252e] hover:bg-[#2d313c] border border-white/10 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-            title="Join Another Room"
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Join</span>
           </button>
         </div>
       </header>
@@ -707,10 +701,10 @@ export const RoomPage: React.FC = () => {
 
       {/* Main Edge-to-Edge WhatsApp Call Video Stage */}
       <main className="flex-1 relative overflow-hidden flex flex-col p-2 sm:p-3 bg-[#0a0c10]" aria-label="Video Call Feed">
-        {/* Fullscreen Video Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 items-stretch justify-center h-full min-h-0 relative">
+        {/* Fullscreen Video Grid (WhatsApp Video Call style with 1, 2, 3, or 4 tiles) */}
+        <div className={`flex-1 grid ${getGridClasses()} gap-2 sm:gap-3 items-stretch justify-center h-full min-h-0 relative`}>
           {/* Tile 1: "You" (Local Webcam with Hand Landmarks) */}
-          <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl group">
+          <div className={`relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl group ${effectivePeerCount === 3 ? 'col-span-2 md:col-span-1' : ''}`}>
             <video
               ref={(el) => {
                 localVideoRef.current = el;
@@ -769,18 +763,18 @@ export const RoomPage: React.FC = () => {
             <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
               <div
                 className={`flex items-center gap-2 px-3 py-1 rounded-full backdrop-blur-md border text-xs font-semibold shadow-lg transition-all ${
-                  detectionResult?.hasHand
+                  detectionResult?.hasHand && detectionResult.letter
                     ? 'bg-amber-950/80 border-amber-500/60 text-amber-300'
                     : 'bg-black/60 border-white/10 text-surface-400'
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    detectionResult?.hasHand ? 'bg-amber-400 animate-ping' : 'bg-surface-500'
+                    detectionResult?.hasHand && detectionResult.letter ? 'bg-amber-400 animate-ping' : 'bg-surface-500'
                   }`}
                 />
                 <span>
-                  {detectionResult?.hasHand
+                  {detectionResult?.hasHand && detectionResult.letter
                     ? `Sign: [${detectionResult.letter}] ${Math.round((detectionResult.confidence || 0) * 100)}%`
                     : aiState === 'active'
                     ? 'Detecting signs...'
@@ -911,9 +905,9 @@ export const RoomPage: React.FC = () => {
                   <Users className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Waiting for Partner to Connect</h3>
+                  <h3 className="text-sm font-bold text-white">Waiting for Others to Join</h3>
                   <p className="text-xs text-surface-400 mt-1 max-w-xs mx-auto">
-                    Share your room code or invite link to start real-time video and sign conversation:
+                    Share your room code to start real-time video call (Up to 4 participants):
                   </p>
                   <span
                     onClick={copyRoomLink}
@@ -927,38 +921,46 @@ export const RoomPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={copyRoomLink}
-                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                   >
                     <Copy className="w-3.5 h-3.5" />
                     Copy Invite Link
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.open(window.location.href, '_blank')}
-                    className="px-3.5 py-2 rounded-xl bg-[#22252e] hover:bg-[#2e323e] border border-white/10 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <span>Open 2nd Tab</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !isSelfLoopback;
-                      setIsSelfLoopback(next);
-                      setIsPartnerConnected(next);
-                      showToast({
-                        type: 'info',
-                        title: next ? 'Self Test Mode Enabled' : 'Self Test Mode Disabled',
-                        message: next ? 'Camera stream mirrored to partner box for testing.' : 'Waiting for remote peer.',
-                      });
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/30 text-purple-200 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <span>{isSelfLoopback ? 'Disable Self Test' : 'Test in Partner Box'}</span>
                   </button>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Additional Dynamic Tiles for 3rd & 4th Participants */}
+          {effectivePeerCount >= 3 && (
+            <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
+              <div className="text-center p-4 text-surface-400 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-300 font-bold text-sm">
+                  P3
+                </div>
+                <h4 className="text-xs font-bold text-white">Participant 3</h4>
+                <span className="text-[10px] text-emerald-400 font-semibold block">Connected</span>
+              </div>
+              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-black/60 text-xs font-semibold text-white">
+                Partner 2
+              </div>
+            </div>
+          )}
+
+          {effectivePeerCount >= 4 && (
+            <div className="relative w-full h-full bg-[#15171f] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center shadow-2xl">
+              <div className="text-center p-4 text-surface-400 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-300 font-bold text-sm">
+                  P4
+                </div>
+                <h4 className="text-xs font-bold text-white">Participant 4</h4>
+                <span className="text-[10px] text-emerald-400 font-semibold block">Connected</span>
+              </div>
+              <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-black/60 text-xs font-semibold text-white">
+                Partner 3
+              </div>
+            </div>
+          )}
         </div>
 
         {/* MAIN SCREEN FLOATING ASSISTIVE BAR (Sign AI, Live Buffer & Word Suggestions) */}
@@ -1220,12 +1222,12 @@ export const RoomPage: React.FC = () => {
         </div>
       </div>
 
-      {/* OVERLAY SLIDE-OUT CHAT DRAWER (WHATSAPP CALL STYLE) */}
+      {/* OVERLAY SLIDE-OUT CHAT DRAWER (WHATSAPP CALL STYLE - MOBILE FRIENDLY) */}
       {isChatDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          {/* Backdrop on mobile */}
+          {/* Backdrop on mobile - clicking immediately closes drawer */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm sm:bg-black/30"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm sm:bg-black/40 transition-opacity"
             onClick={() => setIsChatDrawerOpen(false)}
             aria-hidden="true"
           />
@@ -1235,29 +1237,39 @@ export const RoomPage: React.FC = () => {
             className="relative w-full sm:w-96 bg-[#13151c]/98 backdrop-blur-2xl border-l border-white/10 h-full shadow-2xl z-10 flex flex-col animate-slideInRight"
             aria-label="In-Call Chat"
           >
-            {/* Drawer Header */}
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#171a22]">
+            {/* Mobile swipe-down pull bar */}
+            <div
+              className="w-12 h-1.5 rounded-full bg-white/20 mx-auto mt-2.5 mb-1 sm:hidden cursor-pointer"
+              onClick={() => setIsChatDrawerOpen(false)}
+              title="Tap to close"
+            />
+
+            {/* Drawer Header with large, prominent close button */}
+            <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-[#171a22] shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400">
                   <MessageCircle className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-white">In-Call Messages</h3>
-                  <p className="text-[10px] text-surface-400">Room: {currentRoomId} • WebRTC Live</p>
+                  <p className="text-[10px] text-surface-400">{effectivePeerCount}/4 in room • WebRTC Active</p>
                 </div>
               </div>
+
+              {/* Large touch-friendly Close button */}
               <button
                 type="button"
                 onClick={() => setIsChatDrawerOpen(false)}
-                className="p-1.5 rounded-full hover:bg-white/10 text-surface-400 hover:text-white transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-rose-600 text-surface-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 font-bold text-xs"
                 title="Close chat drawer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
+                <span>Close</span>
               </button>
             </div>
 
-            {/* Chat Messages List (WhatsApp Bubbles) */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar text-xs">
+            {/* Chat Messages List (WhatsApp Bubbles with smooth touch scrolling) */}
+            <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar text-xs overscroll-contain pb-24 touch-pan-y">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -1277,7 +1289,7 @@ export const RoomPage: React.FC = () => {
             </div>
 
             {/* Message Input Box */}
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 bg-[#171a22]">
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 bg-[#171a22] shrink-0">
               <div className="relative flex items-center">
                 <input
                   type="text"
@@ -1528,22 +1540,15 @@ export const RoomPage: React.FC = () => {
                       <span className="font-mono font-bold text-white">{currentRoomId}</span>
                     </div>
                     <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#1b1e29]">
+                      <span>Room Capacity</span>
+                      <span className="font-mono font-bold text-white">{effectivePeerCount} / 4 participants</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#1b1e29]">
                       <span>Signaling Backbone</span>
                       <span className={`font-mono font-bold ${rtdbConnected ? 'text-amber-300' : 'text-surface-400'}`}>
                         {rtdbConnected ? 'Firebase RTDB Active' : 'Disconnected'}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !isSelfLoopback;
-                        setIsSelfLoopback(next);
-                        setIsPartnerConnected(next);
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/30 text-purple-200 text-xs font-semibold cursor-pointer transition-colors"
-                    >
-                      {isSelfLoopback ? 'Disable Self Test' : 'Test Camera in Partner Video Tile'}
-                    </button>
                   </div>
                 )}
               </div>
@@ -1559,6 +1564,30 @@ export const RoomPage: React.FC = () => {
                 Close Settings
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ROOM FULL MODAL (Max 4 Participants Reached) */}
+      {isRoomFull && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#161820] border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">Room is Full</h3>
+              <p className="text-xs text-surface-300 leading-relaxed mt-2">
+                This room has reached its maximum capacity of <strong>4 participants</strong>. Please wait for someone to leave or create a new room.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg transition-colors cursor-pointer"
+            >
+              Return to Dashboard
+            </button>
           </div>
         </div>
       )}
