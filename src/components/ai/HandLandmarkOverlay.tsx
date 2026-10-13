@@ -9,6 +9,8 @@ interface HandLandmarkOverlayProps {
   confidence?: number;
   source?: string;
   isMirrored?: boolean;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  fitMode?: 'cover' | 'contain';
 }
 
 const HAND_CONNECTIONS = [
@@ -32,6 +34,8 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
   letter,
   confidence = 0,
   isMirrored = true,
+  videoRef,
+  fitMode,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -58,14 +62,14 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
     const w = canvas.width;
     const h = canvas.height;
 
-    // Detect sibling video element to precisely align normalized coordinates with rendered video
-    const videoEl = canvas.parentElement?.parentElement?.querySelector('video');
+    // Detect video element to precisely align normalized coordinates with rendered video
+    const videoEl = videoRef?.current || canvas.parentElement?.parentElement?.querySelector('video');
     const vWidth = videoEl?.videoWidth || 640;
     const vHeight = videoEl?.videoHeight || 480;
     const rVideo = vWidth / vHeight;
     const rCanvas = w / h;
 
-    const isContain = videoEl?.classList.contains('object-contain');
+    const isContain = fitMode === 'contain' || videoEl?.classList.contains('object-contain');
     let renderedW = w;
     let renderedH = h;
     let offsetX = 0;

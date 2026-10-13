@@ -80,9 +80,10 @@ export class HandSignDetector {
 
           this.mediaPipeHands.setOptions({
             maxNumHands: 1,
-            modelComplexity: 1,
+            modelComplexity: 0,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
+            selfieMode: true,
           });
 
           this.mediaPipeHands.onResults((results: any) => {
@@ -451,11 +452,12 @@ export class HandSignDetector {
       return false;
     }
 
-    // 'C' requires open curved gap between thumb and fingers
+    // 'C' requires open curved gap between thumb and arched fingers (not straight, not a fist)
     if (label === 'C') {
-      const areCurved = sIndex <= 0.96 && sIndex >= 0.28 && sMiddle <= 0.96 && sMiddle >= 0.28;
-      const isGap = dThumbIndex >= 0.18 && dThumbIndex <= 1.80;
-      return areCurved && isGap;
+      const areCurved = sIndex <= 0.88 && sIndex >= 0.40 && sMiddle <= 0.88 && sMiddle >= 0.40;
+      const isGap = dThumbIndex >= 0.25 && dThumbIndex <= 1.40;
+      const isThumbNotPressed = this.dist(lm[4], lm[9]) > palmScale * 0.30;
+      return areCurved && isGap && isThumbNotPressed;
     }
 
     // 'O' requires closed circle between thumb and fingertips
@@ -603,25 +605,6 @@ export class HandSignDetector {
       return { letter: 'O', confidence: 0.98 };
     }
 
-    // 'C': Cupped hand forming letter C arc with distinct open gap between thumb and fingers
-    const isCGap = dThumbIndex >= 0.22 && dThumbIndex <= 1.80;
-    const isCNotO = dThumbIndex >= 0.22 && (dThumbMiddle >= 0.22 || dIndexMiddle >= 0.15);
-    const areCurvedC =
-      fIndex.straightness >= 0.28 && fIndex.straightness <= 0.95 &&
-      fMiddle.straightness >= 0.28 && fMiddle.straightness <= 0.95;
-    const areTipsNotClosedFist =
-      this.dist(lm[8], lm[0]) > palmScale * 0.55 ||
-      this.dist(lm[8], lm[5]) > palmScale * 0.20;
-    const isThumbCuppedOut =
-      this.dist(lm[4], lm[9]) > palmScale * 0.28 &&
-      this.dist(lm[4], lm[13]) > palmScale * 0.28;
-    const areFourUprightStraight =
-      fIndex.isUp && fMiddle.isUp && fRing.isUp && fPinky.isUp &&
-      fIndex.straightness >= 0.88 && fMiddle.straightness >= 0.88;
-
-    if (isCGap && isCNotO && areCurvedC && areTipsNotClosedFist && isThumbCuppedOut && !areFourUprightStraight) {
-      return { letter: 'C', confidence: 0.99 };
-    }
 
     // ==========================================
     // 2. ALL 4 FINGERS EXTENDED (B vs OPEN PALM)
@@ -754,10 +737,30 @@ export class HandSignDetector {
     }
 
     // ==========================================
+    // 6.5 ARCHED 'C' (Cupped Hand, Open Aperture)
+    // Only evaluated when NO fingers are extended straight!
+    // ==========================================
+    const noneUpright = !fIndex.isUp && !fMiddle.isUp && !fRing.isUp && !fPinky.isUp;
+    const noFingersExtended = !fIndex.isExtended && !fMiddle.isExtended && !fRing.isExtended && !fPinky.isExtended;
+    const areCurvedArc =
+      fIndex.straightness >= 0.45 && fIndex.straightness <= 0.88 &&
+      fMiddle.straightness >= 0.45 && fMiddle.straightness <= 0.88;
+    const isCGap = dThumbIndex >= 0.28 && dThumbIndex <= 1.35 && dThumbMiddle >= 0.28;
+    const isFingersNotFist =
+      this.dist(lm[8], lm[5]) > palmScale * 0.28 &&
+      (this.dist(lm[8], lm[0]) > palmScale * 0.65 || lm[8].y < lm[5].y + palmScale * 0.15);
+    const isThumbCuppedOut =
+      this.dist(lm[4], lm[13]) > palmScale * 0.38 &&
+      this.dist(lm[4], lm[9]) > palmScale * 0.32;
+
+    if (noFingersExtended && areCurvedArc && isCGap && isFingersNotFist && isThumbCuppedOut && noneUpright) {
+      return { letter: 'C', confidence: 0.98 };
+    }
+
+    // ==========================================
     // 7. FIST LETTERS (A, E, M, N, S, T)
     // Strict requirement: all 4 fingers must be folded/curled into the palm
     // ==========================================
-    const noneUpright = !fIndex.isUp && !fMiddle.isUp && !fRing.isUp && !fPinky.isUp;
     const atLeastThreeCurled =
       (fIndex.isCurled ? 1 : 0) +
       (fMiddle.isCurled ? 1 : 0) +

@@ -320,7 +320,8 @@ export const RoomPage: React.FC = () => {
           // Double/Triple letter hold handling (e.g. for "MOON", "HELLO")
           if (validLetter === lastCommittedLetter) {
             holdCount++;
-            if (holdCount >= 7 && repeatCount === 0) {
+            // Require a deliberate hold of ~1.5s (13 frames @ 120ms) for intentional duplicate letter
+            if (holdCount >= 13 && repeatCount === 0) {
               const letter = validLetter;
               appendCharacter(letter);
               const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
@@ -331,7 +332,7 @@ export const RoomPage: React.FC = () => {
                 setPartnerLiveCaption(updatedBuffer);
               }
               repeatCount = 1;
-            } else if (holdCount >= 11 && repeatCount === 1) {
+            } else if (holdCount >= 22 && repeatCount === 1) {
               const letter = validLetter;
               appendCharacter(letter);
               const updatedBuffer = (recognizedTextRef.current + letter).toUpperCase();
@@ -385,7 +386,7 @@ export const RoomPage: React.FC = () => {
       } catch {
         // Continue detection loop
       }
-    }, 180);
+    }, 120);
 
     return () => {
       isMounted = false;
@@ -587,18 +588,19 @@ export const RoomPage: React.FC = () => {
     setUnreadCount(0);
   };
 
-  // Dynamic WhatsApp Call grid: always use vertical division (columns) so faces and hands are never cropped horizontally
+  // Dynamic WhatsApp Call grid:
+  // Mobile: 2 vertically stacked equal tiles (WhatsApp mobile style)
+  // Desktop: 2 equal side-by-side vertical columns (WhatsApp desktop / Meet style)
   const effectivePeerCount = Math.min(4, Math.max(1, peerCount));
   const getGridClasses = () => {
     if (effectivePeerCount <= 2) {
-      // 1 or 2 users: 2 vertical columns side-by-side (Vertical division)
-      return 'grid-cols-2 grid-rows-1';
+      return 'grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1';
     }
     if (effectivePeerCount === 3) {
-      // 3 users: 3 vertical columns on desktop, 2 cols on mobile
-      return 'grid-cols-2 sm:grid-cols-3 grid-rows-1';
+      // 3 users: 1 top hero + 2 bottom on mobile; 3 equal columns on desktop
+      return 'grid-cols-2 md:grid-cols-3 grid-rows-2 md:grid-rows-1';
     }
-    // 4 users: 2x2 grid (vertical division across 2 rows)
+    // 4 users: 2x2 quadrant grid on both mobile and desktop
     return 'grid-cols-2 grid-rows-2';
   };
 
@@ -801,6 +803,8 @@ export const RoomPage: React.FC = () => {
                 confidence={detectionResult?.confidence}
                 source={detectionResult?.source}
                 isMirrored={true}
+                videoRef={localVideoRef}
+                fitMode={videoFit}
               />
             )}
           </div>
