@@ -40,7 +40,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
   const renderNavContent = (isMobileView = false) => (
     <div className="flex flex-col h-full">
       {/* Brand Header */}
-      <div className="p-4 border-b border-white/10 flex items-center justify-between">
+      <div className="p-4 border-b border-[#1e293b] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <SignMateLogo size="sm" />
           <div>
@@ -76,8 +76,8 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all ${
                 isActive
-                  ? 'bg-blue-600/25 text-blue-300 border border-blue-500/40 shadow-sm'
-                  : 'text-[#94a3b8] hover:text-white hover:bg-white/5'
+                  ? 'bg-[#0284C7]/20 text-[#38bdf8] border border-[#0284C7]/40 shadow-sm'
+                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-white/5'
               }`
             }
           >
@@ -102,7 +102,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="w-64 bg-[#111317] border-r border-white/10 hidden md:flex flex-col shrink-0 min-h-[calc(100vh-4rem)] select-none text-xs"
+        className="w-64 bg-[#1B2436] border-r border-[#1e293b] hidden md:flex flex-col shrink-0 min-h-[calc(100vh-4rem)] select-none text-xs"
         aria-label="User Sidebar Navigation"
       >
         {renderNavContent(false)}
@@ -113,7 +113,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
         <button
           type="button"
           onClick={() => setIsMobileOpen(true)}
-          className="p-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-2xl flex items-center gap-2 border border-blue-400/30 transition-transform active:scale-95"
+          className="p-3 rounded-full bg-[#0284C7] hover:bg-[#0369a1] text-white shadow-2xl flex items-center gap-2 border border-[#38bdf8]/30 transition-transform active:scale-95"
           aria-label="Open Navigation Menu"
         >
           <Menu className="w-5 h-5" />
@@ -130,7 +130,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({ onCloseMobile }) => {
             aria-hidden="true"
           />
           <aside
-            className="relative w-72 max-w-[85vw] bg-[#111317] border-r border-white/10 h-full shadow-2xl z-10 flex flex-col animate-slideInLeft"
+            className="relative w-72 max-w-[85vw] bg-[#1B2436] border-r border-[#1e293b] h-full shadow-2xl z-10 flex flex-col animate-slideInLeft"
             aria-label="Mobile Navigation"
           >
             {renderNavContent(true)}

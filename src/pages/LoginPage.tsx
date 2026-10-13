@@ -78,7 +78,7 @@ export const LoginPage: React.FC = () => {
 
       {/* Login Wrapper & Glassmorphism Card (Pages 51-53) */}
       <div className="relative w-full max-w-[420px] z-10 animate-fadeIn">
-        <div className="rounded-[20px] bg-[rgba(20,20,20,0.85)] border border-[rgba(255,255,255,0.08)] p-6 sm:p-10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-[20px]">
+        <div className="rounded-[20px] bg-[#1B2436]/90 border border-[#1e293b] p-6 sm:p-10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-[20px]">
           {/* Professional Brand Section */}
           <div className="text-center mb-6">
             <div className="flex justify-center mb-3">

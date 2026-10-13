@@ -38,7 +38,7 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12]">
+    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#121824]">
       {/* Left Sidebar (Desktop + Mobile Drawer) */}
       <UserSidebar />
 
@@ -49,21 +49,21 @@ export const DashboardPage: React.FC = () => {
           <div className="flex justify-center">
             <SignMateLogo size="lg" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-[2px] uppercase text-white font-['Montserrat',sans-serif]">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-[2px] uppercase text-[#F8FAFC] font-['Montserrat',sans-serif]">
             SIGNMATE
           </h1>
-          <p className="text-xs text-[#a0a0a0] tracking-wider uppercase font-medium">
+          <p className="text-xs text-[#94A3B8] tracking-wider uppercase font-medium">
             Bridging the Gap Through Technology {user?.displayName ? `• Welcome ${user.displayName}` : ''}
           </p>
         </div>
 
         {/* Communication Made Easy Banner & Quick Room Actions */}
-        <div className="rounded-2xl bg-[#14171d] border border-white/5 p-6 sm:p-8 space-y-6 text-center max-w-4xl mx-auto shadow-lg">
+        <div className="rounded-2xl bg-[#1B2436] border border-[#1e293b] p-6 sm:p-8 space-y-6 text-center max-w-4xl mx-auto shadow-lg">
           <div className="space-y-2">
-            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-wider text-white">
+            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-wider text-[#F8FAFC]">
               COMMUNICATION MADE EASY
             </h2>
-            <p className="text-xs sm:text-sm text-[#8e94a0] max-w-2xl mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#94A3B8] max-w-2xl mx-auto leading-relaxed">
               SIGNMATE is a revolutionary platform that breaks down communication barriers between
               deaf/mute individuals and the hearing community. We utilize advanced translation
               technology to foster seamless two-way interaction.
@@ -75,7 +75,7 @@ export const DashboardPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
-              className="px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm flex items-center gap-2.5 shadow-lg shadow-brand-500/25 transition-all active:scale-[0.98]"
+              className="px-6 py-3 rounded-xl bg-[#0284C7] hover:bg-[#0369a1] text-white font-semibold text-sm flex items-center gap-2.5 shadow-lg shadow-[#0284C7]/20 transition-all active:scale-[0.98] cursor-pointer"
             >
               <PlusCircle className="w-5 h-5" />
               <span>Create Video Room</span>
@@ -84,43 +84,43 @@ export const DashboardPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsJoinOpen(true)}
-              className="px-6 py-3 rounded-xl bg-surface-800 hover:bg-surface-700 text-surface-100 border border-surface-700 font-semibold text-sm flex items-center gap-2.5 shadow-md transition-all active:scale-[0.98]"
+              className="px-6 py-3 rounded-xl bg-[#121824] hover:bg-[#1e293b] text-[#F8FAFC] border border-[#1e293b] font-semibold text-sm flex items-center gap-2.5 shadow-md transition-all active:scale-[0.98] cursor-pointer"
             >
-              <Hash className="w-5 h-5 text-brand-400" />
+              <Hash className="w-5 h-5 text-[#38bdf8]" />
               <span>Join Room</span>
             </button>
           </div>
 
           {/* 3 Core Translation Feature Cards from Page 66 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center pt-4">
-            <div className="p-4 rounded-xl bg-[#0d0f14] border border-white/5 space-y-2">
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 mx-auto">
+            <div className="p-4 rounded-xl bg-[#121824] border border-[#1e293b] space-y-2">
+              <div className="w-10 h-10 rounded-full bg-[#0284C7]/15 border border-[#0284C7]/30 flex items-center justify-center text-[#38bdf8] mx-auto">
                 <Video className="w-5 h-5" />
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">VISUAL INPUT</h3>
-              <p className="text-[11px] text-[#8e94a0] leading-relaxed">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#F8FAFC]">VISUAL INPUT</h3>
+              <p className="text-[11px] text-[#94A3B8] leading-relaxed">
                 Deaf/Mute users communicate via camera. Our system captures sign language gestures in
                 real-time.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#0d0f14] border border-white/5 space-y-2">
-              <div className="w-10 h-10 rounded-full bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 mx-auto">
+            <div className="p-4 rounded-xl bg-[#121824] border border-[#1e293b] space-y-2">
+              <div className="w-10 h-10 rounded-full bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 mx-auto">
                 <RefreshCw className="w-5 h-5" />
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">TRANSLATION</h3>
-              <p className="text-[11px] text-[#8e94a0] leading-relaxed">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#F8FAFC]">TRANSLATION</h3>
+              <p className="text-[11px] text-[#94A3B8] leading-relaxed">
                 Signs are instantly translated into text for the hearing person to read and
                 understand.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#0d0f14] border border-white/5 space-y-2">
-              <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto">
+            <div className="p-4 rounded-xl bg-[#121824] border border-[#1e293b] space-y-2">
+              <div className="w-10 h-10 rounded-full bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto">
                 <Volume2 className="w-5 h-5" />
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">SPEECH OUTPUT</h3>
-              <p className="text-[11px] text-[#8e94a0] leading-relaxed">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#F8FAFC]">SPEECH OUTPUT</h3>
+              <p className="text-[11px] text-[#94A3B8] leading-relaxed">
                 Hearing users speak normally. Their speech is converted to text for the Deaf/Mute
                 user.
               </p>
@@ -130,7 +130,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* User Dashboard Action Grid from Page 66 */}
         <div className="space-y-4 max-w-4xl mx-auto">
-          <h2 className="text-center text-sm font-bold uppercase tracking-[2px] text-white">
+          <h2 className="text-center text-sm font-bold uppercase tracking-[2px] text-[#F8FAFC]">
             USER DASHBOARD
           </h2>
 
@@ -140,12 +140,12 @@ export const DashboardPage: React.FC = () => {
                 key={item.label}
                 type="button"
                 onClick={item.action}
-                className="flex flex-col items-center justify-center p-4 rounded-xl bg-[#14171d] border border-white/5 hover:border-brand-500/40 hover:bg-[#1a1e26] transition-all group shadow-sm active:scale-[0.98] min-h-[96px]"
+                className="flex flex-col items-center justify-center p-4 rounded-xl bg-[#1B2436] border border-[#1e293b] hover:border-[#0284C7]/50 hover:bg-[#172233] transition-all group shadow-sm active:scale-[0.98] min-h-[96px] cursor-pointer"
               >
                 <div className="p-2 rounded-lg bg-black/40 mb-2 group-hover:scale-110 transition-transform">
                   {item.icon}
                 </div>
-                <span className="text-[11px] font-bold tracking-wider text-[#e0e0e0] group-hover:text-white uppercase text-center">
+                <span className="text-[11px] font-bold tracking-wider text-[#94A3B8] group-hover:text-white uppercase text-center">
                   {item.label}
                 </span>
               </button>

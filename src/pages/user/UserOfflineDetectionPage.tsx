@@ -321,15 +321,15 @@ export const UserOfflineDetectionPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12]">
+    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#121824]">
       <UserSidebar />
 
       <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto custom-scrollbar">
         {/* Header */}
-        <div className="border-b border-white/5 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="border-b border-[#1e293b] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-brand-950/80 border border-brand-700/60 text-[10px] font-bold text-brand-300 uppercase">
+              <span className="px-2 py-0.5 rounded bg-[#1B2436] border border-[#1e293b] text-[10px] font-bold text-[#38bdf8] uppercase">
                 Sign Language Detection
               </span>
               <span className="text-xs text-emerald-400 font-semibold">• Face-to-Face Ready</span>
@@ -337,7 +337,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white mt-1">
               Dual-Mode Offline Detection Station
             </h1>
-            <p className="text-xs text-[#8e94a0] mt-0.5">
+            <p className="text-xs text-[#94A3B8] mt-0.5">
               Real-time sign language translation and speech captions for seamless face-to-face communication.
             </p>
           </div>
@@ -346,7 +346,7 @@ export const UserOfflineDetectionPage: React.FC = () => {
         {/* Split Screen Interaction Arena */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* LEFT: Deaf / Mute User Station (Sign to Text & Speech) */}
-          <div className="bg-[#141720] border border-white/5 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl">
+          <div className="bg-[#1B2436] border border-[#1e293b] rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-brand-500/20 text-brand-400">
@@ -585,8 +585,8 @@ export const UserOfflineDetectionPage: React.FC = () => {
           </div>
 
           {/* RIGHT: Hearing Participant Station (Voice to Text Captions) */}
-          <div className="bg-[#141720] border border-white/5 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="bg-[#1B2436] border border-[#1e293b] rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#1e293b] pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
                   <User className="w-4 h-4" />

@@ -161,17 +161,17 @@ Local Time: ${new Date().toLocaleString()}
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#0d0f12] text-surface-100 font-['Montserrat',sans-serif]">
+    <div className="flex-1 flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-[#121824] text-surface-100 font-sans">
       {/* Sidebar */}
       <UserSidebar />
 
       {/* Main Content */}
       <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 overflow-y-auto custom-scrollbar">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#1e293b] pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-[#0284C7]/15 border border-[#0284C7]/30 flex items-center justify-center text-[#38bdf8] shadow-md">
                 <LifeBuoy className="w-5 h-5" />
               </div>
               <h1 className="text-xl sm:text-2xl font-extrabold uppercase tracking-wider text-white">
@@ -184,7 +184,7 @@ Local Time: ${new Date().toLocaleString()}
           </div>
 
           {/* Direct Support Status Badge */}
-          <div className="flex items-center gap-3 bg-[#141722] border border-white/10 px-4 py-2.5 rounded-2xl shadow-sm self-start sm:self-auto">
+          <div className="flex items-center gap-3 bg-[#1B2436] border border-[#1e293b] px-4 py-2.5 rounded-2xl shadow-sm self-start sm:self-auto">
             <div className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -326,10 +326,10 @@ Local Time: ${new Date().toLocaleString()}
 
           {/* RIGHT: Send Feedback Form (5 cols) */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-[#141722] border border-white/15 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
-              <div className="border-b border-white/10 pb-4">
+            <div className="bg-[#1B2436] border border-[#1e293b] rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
+              <div className="border-b border-[#1e293b] pb-4">
                 <div className="flex items-center gap-2 mb-1">
-                  <MessageSquare className="w-5 h-5 text-amber-400" />
+                  <MessageSquare className="w-5 h-5 text-[#38bdf8]" />
                   <h2 className="text-base sm:text-lg font-bold text-white">Send Feedback & Report Issues</h2>
                 </div>
                 <p className="text-xs text-surface-400">
@@ -351,7 +351,7 @@ Local Time: ${new Date().toLocaleString()}
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Alex Johnson"
-                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#0e1017] border border-white/10 text-xs text-white placeholder:text-surface-600 outline-none focus:border-amber-500 transition-colors"
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#121824] border border-[#1e293b] text-xs text-white placeholder:text-surface-600 outline-none focus:border-[#0284C7] transition-colors"
                     />
                   </div>
                 </div>

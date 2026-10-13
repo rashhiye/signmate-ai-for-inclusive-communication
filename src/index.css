@@ -5,20 +5,45 @@
 @layer base {
   :root {
     color-scheme: dark;
+
+    /* High-contrast, non-glare dark background */
+    --bg-primary: #121824;
+    --bg-secondary: #1B2436;
+
+    /* Focus elements (Sky blue is highly visible against dark backgrounds) */
+    --accent-active: #0284C7;
+    --accent-hover: #0369a1;
+
+    /* Critical state colors */
+    --state-danger: #EF4444;
+
+    /* High contrast text (Passes WCAG AAA) */
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+
+    /* Clean structural borders */
+    --border-muted: #1e293b;
   }
 
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    background-color: var(--bg-primary);
   }
 
+  /* Base resets to immediately apply the look */
   body {
-    @apply bg-surface-950 text-surface-100 font-sans min-h-screen overflow-x-hidden;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
   }
 
   /* High-visibility focus indicators for accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-950;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-active);
   }
 
   /* Screen reader only utility */
