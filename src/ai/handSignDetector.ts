@@ -604,22 +604,22 @@ export class HandSignDetector {
     }
 
     // 'C': Cupped hand forming letter C arc with distinct open gap between thumb and fingers
-    const isCGap = dThumbIndex >= 0.20 && dThumbIndex <= 1.80;
-    const isCNotO = dThumbIndex >= 0.20 && (dThumbMiddle >= 0.20 || dIndexMiddle >= 0.15);
+    const isCGap = dThumbIndex >= 0.22 && dThumbIndex <= 1.80;
+    const isCNotO = dThumbIndex >= 0.22 && (dThumbMiddle >= 0.22 || dIndexMiddle >= 0.15);
     const areCurvedC =
       fIndex.straightness >= 0.28 && fIndex.straightness <= 0.95 &&
       fMiddle.straightness >= 0.28 && fMiddle.straightness <= 0.95;
     const areTipsNotClosedFist =
-      this.dist(lm[8], lm[5]) > palmScale * 0.22 &&
-      this.dist(lm[12], lm[9]) > palmScale * 0.22;
-    const isThumbNotTucked =
-      this.dist(lm[4], lm[13]) > palmScale * 0.30 ||
-      this.dist(lm[4], lm[2]) > palmScale * 0.20;
+      this.dist(lm[8], lm[0]) > palmScale * 0.55 ||
+      this.dist(lm[8], lm[5]) > palmScale * 0.20;
+    const isThumbCuppedOut =
+      this.dist(lm[4], lm[9]) > palmScale * 0.28 &&
+      this.dist(lm[4], lm[13]) > palmScale * 0.28;
     const areFourUprightStraight =
       fIndex.isUp && fMiddle.isUp && fRing.isUp && fPinky.isUp &&
       fIndex.straightness >= 0.88 && fMiddle.straightness >= 0.88;
 
-    if (isCGap && isCNotO && areCurvedC && areTipsNotClosedFist && isThumbNotTucked && !areFourUprightStraight) {
+    if (isCGap && isCNotO && areCurvedC && areTipsNotClosedFist && isThumbCuppedOut && !areFourUprightStraight) {
       return { letter: 'C', confidence: 0.99 };
     }
 
@@ -771,16 +771,6 @@ export class HandSignDetector {
       const dThumbMiddleTip = this.dist(lm[4], lm[12]) / palmScale;
       const dThumbIndexPip = this.dist(lm[4], lm[6]) / palmScale;
       const dThumbMiddlePip = this.dist(lm[4], lm[10]) / palmScale;
-
-      // Critical Guard: An open C-cavity is NOT a fist! If there is an open C gap and thumb is cupped out, it is 'C'
-      const isCCavity =
-        dThumbIndexTip >= 0.20 &&
-        dThumbIndexTip <= 1.80 &&
-        (dThumbMiddleTip >= 0.20 || dIndexMiddle <= 0.45) &&
-        (this.dist(lm[4], lm[13]) > palmScale * 0.30 || this.dist(lm[4], lm[2]) > palmScale * 0.18);
-      if (isCCavity) {
-        return { letter: 'C', confidence: 0.99 };
-      }
 
       const d4_5 = this.dist(lm[4], lm[5]) / palmScale;   // Index MCP knuckle
       const d4_9 = this.dist(lm[4], lm[9]) / palmScale;   // Middle MCP knuckle

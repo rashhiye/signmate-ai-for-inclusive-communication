@@ -94,6 +94,9 @@ export const RoomPage: React.FC = () => {
   // Floating assistive bar collapse toggle
   const [isAssistiveCollapsed, setIsAssistiveCollapsed] = useState(false);
 
+  // Video aspect ratio mode: 'cover' (edge-to-edge) vs 'contain' (full frame fit)
+  const [videoFit, setVideoFit] = useState<'cover' | 'contain'>('cover');
+
   // Accordion Settings Modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<'audio' | 'video' | 'ai' | 'room'>('audio');
@@ -584,21 +587,18 @@ export const RoomPage: React.FC = () => {
     setUnreadCount(0);
   };
 
-  // Compute dynamic WhatsApp Call grid class based on peerCount (Max 4)
+  // Dynamic WhatsApp Call grid: always use vertical division (columns) so faces and hands are never cropped horizontally
   const effectivePeerCount = Math.min(4, Math.max(1, peerCount));
   const getGridClasses = () => {
-    if (effectivePeerCount === 1) {
-      return 'grid-cols-1 grid-rows-1';
-    }
-    if (effectivePeerCount === 2) {
-      // 2 users: stacked on mobile, side-by-side on desktop
-      return 'grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1';
+    if (effectivePeerCount <= 2) {
+      // 1 or 2 users: 2 vertical columns side-by-side (Vertical division)
+      return 'grid-cols-2 grid-rows-1';
     }
     if (effectivePeerCount === 3) {
-      // 3 users: 1 top hero, 2 bottom on mobile; 3 columns on desktop
-      return 'grid-cols-2 md:grid-cols-3 grid-rows-2 md:grid-rows-1';
+      // 3 users: 3 vertical columns on desktop, 2 cols on mobile
+      return 'grid-cols-2 sm:grid-cols-3 grid-rows-1';
     }
-    // 4 users: 2x2 grid on both mobile and desktop (WhatsApp 4-person style)
+    // 4 users: 2x2 grid (vertical division across 2 rows)
     return 'grid-cols-2 grid-rows-2';
   };
 
@@ -716,7 +716,7 @@ export const RoomPage: React.FC = () => {
               autoPlay
               playsInline
               muted
-              className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+              className={`w-full h-full ${videoFit === 'contain' ? 'object-contain' : 'object-cover'} object-center scale-x-[-1] transition-opacity duration-300 ${
                 isCameraEnabled && localStream ? 'opacity-100' : 'opacity-0'
               }`}
             />
@@ -757,6 +757,14 @@ export const RoomPage: React.FC = () => {
               <span className="px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-md text-[10px] text-surface-400 border border-white/5">
                 {isMicEnabled ? 'Mic On' : 'Muted'}
               </span>
+              <button
+                type="button"
+                onClick={() => setVideoFit((f) => (f === 'cover' ? 'contain' : 'cover'))}
+                className="px-2.5 py-0.5 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-[10px] text-surface-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                title="Toggle between edge-to-edge fill and uncropped fit"
+              >
+                {videoFit === 'cover' ? 'Fit View' : 'Fill View'}
+              </button>
             </div>
 
             {/* Top-Right: Sign Detection Active Indicator */}
@@ -805,7 +813,7 @@ export const RoomPage: React.FC = () => {
                   ref={partnerVideoRef}
                   autoPlay
                   playsInline
-                  className={`w-full h-full object-cover ${isSelfLoopback ? 'scale-x-[-1]' : ''}`}
+                  className={`w-full h-full ${videoFit === 'contain' ? 'object-contain' : 'object-cover'} object-center ${isSelfLoopback ? 'scale-x-[-1]' : ''}`}
                 />
 
                 {/* Top-Left: Partner Badge */}

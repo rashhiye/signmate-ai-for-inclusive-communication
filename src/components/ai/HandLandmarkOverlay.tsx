@@ -58,10 +58,51 @@ export const HandLandmarkOverlay: React.FC<HandLandmarkOverlayProps> = ({
     const w = canvas.width;
     const h = canvas.height;
 
-    // Coordinate conversion function considering mirroring
+    // Detect sibling video element to precisely align normalized coordinates with rendered video
+    const videoEl = canvas.parentElement?.parentElement?.querySelector('video');
+    const vWidth = videoEl?.videoWidth || 640;
+    const vHeight = videoEl?.videoHeight || 480;
+    const rVideo = vWidth / vHeight;
+    const rCanvas = w / h;
+
+    const isContain = videoEl?.classList.contains('object-contain');
+    let renderedW = w;
+    let renderedH = h;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (isContain) {
+      if (rVideo > rCanvas) {
+        renderedW = w;
+        renderedH = w / rVideo;
+        offsetX = 0;
+        offsetY = (h - renderedH) / 2;
+      } else {
+        renderedH = h;
+        renderedW = h * rVideo;
+        offsetX = (w - renderedW) / 2;
+        offsetY = 0;
+      }
+    } else {
+      // object-cover (fills the box, crops overflow symmetrically)
+      if (rVideo > rCanvas) {
+        renderedH = h;
+        renderedW = h * rVideo;
+        offsetX = (w - renderedW) / 2;
+        offsetY = 0;
+      } else {
+        renderedW = w;
+        renderedH = w / rVideo;
+        offsetX = 0;
+        offsetY = (h - renderedH) / 2;
+      }
+    }
+
+    // Coordinate conversion function considering mirroring & exact video scaling
     const getCoords = (p: LandmarkPoint) => {
-      const x = isMirrored ? (1 - p.x) * w : p.x * w;
-      const y = p.y * h;
+      const normX = isMirrored ? (1 - p.x) : p.x;
+      const x = normX * renderedW + offsetX;
+      const y = p.y * renderedH + offsetY;
       return { x, y };
     };
 
